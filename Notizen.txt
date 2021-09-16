@@ -1,0 +1,2 @@
+- Shared supplier Feature verwenden?
+- Artikel können per CSV nicht auf inaktiv gesetzt, sondern nur gelöscht werden - ändern?
