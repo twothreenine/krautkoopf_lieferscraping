@@ -1,2 +1,10 @@
 - Shared supplier Feature verwenden?
 - Artikel können per CSV nicht auf inaktiv gesetzt, sondern nur gelöscht werden - ändern?
+
+aktuell:
+- Bug, dass in der Nachricht alle Unterkategorien für alle Kategorien aufgelistet werden, beheben
+- Artikelkategorie zuordnen (Krautkoopf-spezifisch, z.B. Wein, Sekt & Bier -> Alkoholische Getränke)
+- Ignorelist testen
+- Foodsoft CSV herunterladen & Anpassungen übernehmen
+- Foodsoft -> Mail verschicken
+- Skript auf Anforderung ausführen statt zB wöchentlich, oder irgendwie feststellen, ob die CSV daraufhin auch hochgeladen wurde?
