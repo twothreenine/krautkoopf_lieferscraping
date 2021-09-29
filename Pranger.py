@@ -26,6 +26,7 @@ def getSubcategories(id):
   subcats = []
   print('sg'+str(id))
   category = base.Category(number=id)
+  category.subcategories = []
   subgroup = menu.body.find(id=('sg'+str(id)))
   if subgroup:
     subcat_links = subgroup.find_all('a')

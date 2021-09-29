@@ -73,18 +73,18 @@ def get_data_from_articles(articles):
     return rows
 
 def listCategories(categories):
-    text = ""
+    txt = ""
     for category in categories:
-        text += "#" + str(category.number) + " " + category.name
+        txt += "#" + str(category.number) + " " + category.name
         if category.subcategories:
             subcats = category.subcategories.copy()
-            text += " (inkl. Unterkategorien " + subcats[0].name
+            txt += " (inkl. Unterkategorien " + subcats[0].name
             subcats.pop(0)
             for sc in subcats:
-                text += ", " + sc.name
-            text += ")"
-        text += "\n"
-    return text
+                txt += ", " + sc.name
+            txt += ")"
+        txt += "\n"
+    return txt
 
 def send_message(supplier, categories, ignored_categories, ignored_subcategories, ignored_articles):
     text = "Hallo,\n\ndie Liste an automatisch ausgelesenen Artikeln von " + supplier + " befindet sich im Anhang.\n"
