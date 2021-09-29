@@ -47,8 +47,18 @@ def rename_duplicates(articles):
 
 def validate_string(string, string_type):
     string = str(string)
-    if len(string) > 255:
-        shortened_string = string[0:252] + '...'
+    if string_type == "unit":
+        max_length = 15
+        abort_string = "/"
+    elif string_type == "name":
+        max_length = 60
+        abort_string = "/"
+    else:
+        max_length = 255
+        abort_string = "..."
+    if len(string) > max_length:
+        short_length = max_length - len(abort_string)
+        shortened_string = string[0:short_length] + abort_string
         print("Overlong article " + string_type + " (" + str(len(string)) + " characters) registered:")
         print(string)
         print("shortened to:")

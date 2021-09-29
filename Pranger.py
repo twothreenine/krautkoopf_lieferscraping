@@ -40,7 +40,7 @@ def getSubcategories(id):
         category.subcategories.append(subcategory)
         parsed_html = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.219C/"+sc['href']).text, features="html.parser")
         table = parsed_html.body.find_all('table')
-        subcats.append({"name" : name, "items" : table})
+        subcats.append({"name" : name, "number" : number, "items" : table})
 
   if category.number in categories_to_ignore:
     ignored_categories.append(category)
@@ -63,7 +63,7 @@ def getCategory(id):
     if not existing_categories:
       categories.append(category)
     table = parsed_html.body.find_all('table')
-    return [{"name" : name, "items" : table}]
+    return [{"name" : name, "number" : id, "items" : table}]
 
 def getIfFound(src, class_name):
   item = src.find(class_=class_name)
@@ -71,6 +71,37 @@ def getIfFound(src, class_name):
   if item and item.get_text().strip() != "" : 
     text = item.get_text().strip()
   return text
+
+def matchCategories(name, note, category_number, cat_name):
+  final_cat_name = None
+  if category_number == 51:
+    if "zucker" in name:
+      final_cat_name = "Zucker"
+  elif category_number == 27:
+    final_cat_name = "Konserven"
+  elif category_number == 12:
+    if "Essig" in name or "Essig" in note:
+      final_cat_name = "Essig"
+    elif "öl" in name or "Öl" in name:
+      final_cat_name = "Speiseöl"
+  elif category_number == 13:
+    if "honig" in name or "Honig" in note:
+      final_cat_name = "Honig"
+    else:
+      final_cat_name = "Fruchtaufstrich"
+  elif category_number == 15:
+    if "salz" in name or "Salz" in name:
+      final_cat_name = "Salz"
+    else:
+      final_cat_name = "Gewürze"
+  # elif category_number == 11:
+  #   if "mehl" in name or "Mehl" in name:
+  #     category
+
+  if final_cat_name:
+    return final_cat_name
+  else:
+    return cat_name
 
 def getArticles(category):
   for subcat in category:
@@ -124,7 +155,7 @@ def getArticles(category):
         if unit_info:
           prices[0].unit = unit_info + " " + prices[0].unit
 
-      if len(unit) > 15:
+      if len(prices[0].unit) > 15:
         unit = unit.replace("Flasche", "Fl.").replace("Packung", "Pkg.").replace("Stück", "Stk.")
 
       prices.sort(key=lambda x: x.price)
@@ -136,6 +167,7 @@ def getArticles(category):
       if not favorite_option:
         favorite_option = prices[-1]
 
+      cat_name = matchCategories(name=name, note=note, category_number=subcat["number"], cat_name=cat_name)
       article = base.Article(order_number=order_number, name=name, note=note, unit=favorite_option.unit, price_net=favorite_option.price, category=cat_name, manufacturer=producer, origin=origin, orig_name=name, orig_unit=unit_info)
       if article.order_number in articles_to_ignore:
         ignored_articles.append(article)
