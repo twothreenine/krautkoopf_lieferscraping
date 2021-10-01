@@ -3,7 +3,7 @@ import os
 import datetime
 
 class Article:
-    def __init__(self, order_number, name, unit, price_net, available=True, note="", manufacturer="", origin="", vat=0, deposit=0, unit_quantity=1, category="", orig_name="", orig_unit="", temp=""):
+    def __init__(self, order_number, name, unit, price_net, available=True, note="", manufacturer="", origin="", vat=0, deposit=0, unit_quantity=1, category="", ignore=False, orig_name="", orig_unit="", temp=""):
         self.available = available
         self.order_number = order_number
         self.name = name
@@ -16,6 +16,7 @@ class Article:
         self.deposit = deposit
         self.unit_quantity = unit_quantity
         self.category = category
+        self.ignore = ignore
         self.orig_name = orig_name # for finding duplicates, not loaded into foodsoft
         self.orig_unit = orig_unit # for distinguishing duplicates, not loaded into foodsoft
         self.temp = temp # for temporary data of the script, not loaded into foodsoft
@@ -26,22 +27,70 @@ class Category:
         self.name = name
         self.subcategories = subcategories
 
-def suffix(suffix):
-    return " (" + str(suffix) + ")"
+def remove_articles_to_ignore(articles):
+    return [x for x in articles if not x.ignore]
+
+def suffix(suffix, suffix_type=""):
+    word = ""
+    if suffix_type:
+        if suffix_type == "manufacturer":
+            word = "von "
+        elif suffix_type == "origin":
+            word = "aus "
+    return " (" + word + str(suffix) + ")"
+
+def get_duplicates(article, articles):
+    return [a for a in articles if a.name.casefold().replace(" ", "") == article.name.casefold().replace(" ", "")]
 
 def rename_duplicates(articles):
-    for article in articles:
-        articles_of_this_name = [a for a in articles if a.orig_name == article.orig_name]
-        if len(articles_of_this_name) > 1:
-            if article.orig_unit:
-                articles_of_this_unit = [a for a in articles_of_this_name if a.orig_unit == article.orig_unit]
-                if len(articles_of_this_unit) != len(articles_of_this_name):
-                    article.name += suffix(article.orig_unit)
+    articles_to_rename = {}
 
     for article in articles:
-        articles_of_this_name = [a for a in articles if a.name == article.name]
+        articles_of_this_name = get_duplicates(article, articles)
         if len(articles_of_this_name) > 1:
-            article.name += suffix(articles_of_this_name.index(article) + 1)
+            if article.orig_unit:
+                articles_of_this_unit = [a for a in articles_of_this_name if a.orig_unit.casefold().replace(" ", "") == article.orig_unit.casefold().replace(" ", "")]
+                if len(articles_of_this_unit) != len(articles_of_this_name):
+                    articles_to_rename[article] = article.name + suffix(article.orig_unit)
+
+    for article in articles_to_rename:
+        article.name = articles_to_rename[article]
+
+    articles_to_rename = {}
+
+    for article in articles:
+        articles_of_this_name = get_duplicates(article, articles)
+        if len(articles_of_this_name) > 1:
+            if article.manufacturer:
+                articles_of_this_manufacturer = [a for a in articles_of_this_name if a.manufacturer.casefold().replace(" ", "") == article.manufacturer.casefold().replace(" ", "")]
+                if len(articles_of_this_manufacturer) != len(articles_of_this_name):
+                    articles_to_rename[article] = article.name + suffix(article.manufacturer, "manufacturer")
+
+    for article in articles_to_rename:
+        article.name = articles_to_rename[article]
+        
+    articles_to_rename = {}
+
+    for article in articles:
+        articles_of_this_name = get_duplicates(article, articles)
+        if len(articles_of_this_name) > 1:
+            if article.origin:
+                articles_of_this_origin = [a for a in articles_of_this_name if a.origin.casefold().replace(" ", "") == article.origin.casefold().replace(" ", "")]
+                if len(articles_of_this_origin) != len(articles_of_this_name):
+                    articles_to_rename[article] = article.name + suffix(article.origin, "origin")
+
+    for article in articles_to_rename:
+        article.name = articles_to_rename[article]
+        
+    articles_to_rename = {}
+
+    for article in articles:
+        articles_of_this_name = get_duplicates(article, articles)
+        if len(articles_of_this_name) > 1:
+            articles_to_rename[article] = article.name + suffix(articles_of_this_name.index(article) + 1)
+
+    for article in articles_to_rename:
+        article.name = articles_to_rename[article]
 
     return articles
 
@@ -96,20 +145,20 @@ def listCategories(categories):
         txt += "\n"
     return txt
 
-def send_message(supplier, categories, ignored_categories, ignored_subcategories, ignored_articles):
-    text = "Hallo,\n\ndie Liste an automatisch ausgelesenen Artikeln von " + supplier + " befindet sich im Anhang.\n"
+def compose_message(supplier, categories, ignored_categories, ignored_subcategories, ignored_articles):
+    text = "Anbei die Liste an automatisch ausgelesenen Artikeln von " + supplier + ".\n"
     text += "Sie kann unter folgendem Link hochgeladen werden: (Häkchen bei 'Artikel löschen, die nicht in der hochgeladenen Datei sind' setzen!)\n"
     text += "\n" # Link
     text += "\n\nAusgelesene Kategorien:\n"
     text += listCategories(categories)
     if ignored_categories:
-        text += "\n\nIgnorierte Kategorien:\n"
+        text += "\nIgnorierte Kategorien:\n"
         text += listCategories(ignored_categories)
     if ignored_subcategories:
-        text += "\n\nIgnorierte Unterkategorien:\n"
+        text += "\nIgnorierte Unterkategorien:\n"
         text += listCategories(ignored_subcategories)
     if ignored_articles:
-        text += "\n\nIgnorierte Artikel:\n"
+        text += "\nIgnorierte Artikel:\n"
         for article in ignored_articles:
             text += "#" + str(article.order_number) + " " + article.name + " " + article.unit
             if article.manufacturer:

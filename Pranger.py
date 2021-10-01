@@ -4,8 +4,8 @@ import base
 import re
 
 supplier = "Biohof Pranger"
-categories_to_ignore = []
-subcategories_to_ignore = []
+categories_to_ignore = [3, 8]
+subcategories_to_ignore = [25, 26]
 articles_to_ignore = []
 
 categories = []
@@ -31,22 +31,22 @@ def getSubcategories(id):
     if subgroup:
         subcat_links = subgroup.find_all('a')
         for sc in subcat_links:
-            number = sc['href'].split("id=")[-1]
+            no = sc['href'].split("id=")[-1]
             name = sc.get_text().strip()
-            subcategory = base.Category(number=number, name=name)
-            if number in subcategories_to_ignore:
+            subcategory = base.Category(number="s"+str(no), name=name)
+            if int(no) in subcategories_to_ignore:
                 ignored_subcategories.append(subcategory)
+                ignore = True
             else:
                 category.subcategories.append(subcategory)
-                parsed_html = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.219C/"+sc['href']).text, features="html.parser")
-                table = parsed_html.body.find_all('table')
-                subcats.append({"name" : name, "number" : number, "items" : table})
+                ignore = False
+            parsed_html = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.219C/"+sc['href']).text, features="html.parser")
+            table = parsed_html.body.find_all('table')
+            subcats.append({"name" : name, "number" : "s"+str(no), "items" : table, "ignore" : ignore})
 
-    if category.number in categories_to_ignore:
-        ignored_categories.append(category)
-    else:
+    if category.number not in categories_to_ignore:
         categories.append(category)
-        return subcats
+    return subcats
 
 def getCategory(id):
     parsed_html = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.219C/category.jsp?categoryid="+str(id)+"&cartredir=1").text, features="html.parser")
@@ -56,14 +56,15 @@ def getCategory(id):
         category = existing_categories[0]
         category.name = name
     else:
-        category = base.Category(number=id, name=name)
+        category = base.Category(number=str(id), name=name)
     if id in categories_to_ignore:
         ignored_categories.append(category)
+        return []
     else:
         if not existing_categories:
             categories.append(category)
         table = parsed_html.body.find_all('table')
-        return [{"name" : name, "number" : id, "items" : table}]
+        return [{"name" : name, "number" : str(id), "items" : table, "ignore" : False}]
 
 def getIfFound(src, class_name):
     item = src.find(class_=class_name)
@@ -74,29 +75,52 @@ def getIfFound(src, class_name):
 
 def matchCategories(name, note, category_number, cat_name):
     final_cat_name = None
-    if category_number == 51:
+    if category_number == "s51":
         if "zucker" in name:
             final_cat_name = "Zucker"
-    elif category_number == 27:
+    elif category_number == "s27":
         final_cat_name = "Konserven"
-    elif category_number == 12:
+    elif category_number == "s12":
         if "Essig" in name or "Essig" in note:
             final_cat_name = "Essig"
         elif "öl" in name or "Öl" in name:
             final_cat_name = "Speiseöl"
-    elif category_number == 13:
+    elif category_number == "s13":
         if "honig" in name or "Honig" in note:
             final_cat_name = "Honig"
         else:
             final_cat_name = "Fruchtaufstrich"
-    elif category_number == 15:
+    elif category_number == "s15":
         if "salz" in name or "Salz" in name:
             final_cat_name = "Salz"
         else:
             final_cat_name = "Gewürze"
-    # elif category_number == 11:
-    #     if "mehl" in name or "Mehl" in name:
-    #         category
+    elif category_number == "s11" or category_number == "s32":
+        if "mehl" in name or "Mehl" in name or "gemahlen" in name or "gem." in name:
+            final_cat_name = "Mehl"
+        elif "erbsen" in name or "Erbsen" in name or "linsen" in name or "Linsen" in name or "bohnen" in name or "Bohnen" in name:
+            final_cat_name = "Hülsenfrüchte"
+        elif "nüsse" in name or "Nüsse" in name:
+            final_cat_name = "Nüsse"
+        elif "Leinsamen" in name or "Flohsamen" in name or "Kürbiskerne" in name:
+            final_cat_name = "Ölsaaten"
+        else:
+            final_cat_name = "Körner"
+    elif category_number == "s22":
+        final_cat_name = "Snacks"
+    elif category_number == "s17":
+        final_cat_name = "Alkoholische Getränke"
+    elif category_number == "s3":
+        if "kartoffel" in name or "Kartoffel" in name or "Kartoffel" in note:
+            final_cat_name = "Kartoffel"
+        else:
+            final_cat_name = "Zwiebel, Porree, Knoblauch"
+    elif category_number == "5" or category_number == "s8" or category_number == "s43" or category_number == "s44" or category_number == "s45":
+        final_cat_name = "Obst"
+    elif category_number == "s47":
+        final_cat_name = "Milchprodukte"
+    elif category_number == "2":
+        final_cat_name = "Getränke"
 
     if final_cat_name:
         return final_cat_name
@@ -108,6 +132,7 @@ def getArticles(category):
         if subcat["items"] == [] : 
             continue
         cat_name = subcat["name"]
+        ignore = subcat["ignore"]
         print(cat_name)
 
         for item in subcat["items"] :
@@ -115,7 +140,7 @@ def getArticles(category):
             order_number = item_link.split("id=")[-1]
             if [x for x in articles if x.order_number == order_number]:
                 continue
-            title = item.find(class_="font2 ic3 itemname").text.replace("Bio-", "").replace(" Pkg.", "").replace(" PKG.", "").replace(" Pkg", "").replace(" PKG", "").replace(" Stk.", "").replace(" Bd.", "").replace(" Str.", "").replace(" kg", "").strip()
+            title = item.find(class_="font2 ic3 itemname").text.replace("Bio-", "").replace(" Pkg.", "").replace(" PKG.", "").replace(" Pkg", "").replace(" PKG", "").replace(" Stk.", "").replace(" Bd.", "").replace(" Str.", "").replace(" Fl.", "").replace(" kg", "").strip()
             title_contents = re.split("(.+)\s(\d.?\d*.?\S+)\s?([a-zA-Z]*)", title)
             if len(title_contents) > 1:
                 name = title_contents[1]
@@ -155,8 +180,10 @@ def getArticles(category):
                 if unit_info:
                     prices[0].unit = unit_info + " " + prices[0].unit
 
-            if len(prices[0].unit) > 15:
-                unit = unit.replace("Flasche", "Fl.").replace("Packung", "Pkg.").replace("Stück", "Stk.")
+            for price in prices:
+                price.unit = price.unit.replace("1kg kg", "1kg")
+                if len(price.unit) > 15:
+                    price.unit = price.unit.replace("Flasche", "Fl.").replace("Packung", "Pkg.").replace("Stück", "Stk")
 
             prices.sort(key=lambda x: x.price)
             favorite_option = None
@@ -168,11 +195,11 @@ def getArticles(category):
                 favorite_option = prices[-1]
 
             cat_name = matchCategories(name=name, note=note, category_number=subcat["number"], cat_name=cat_name)
-            article = base.Article(order_number=order_number, name=name, note=note, unit=favorite_option.unit, price_net=favorite_option.price, category=cat_name, manufacturer=producer, origin=origin, orig_name=name, orig_unit=unit_info)
-            if article.order_number in articles_to_ignore:
+            article = base.Article(order_number=order_number, name=name, note=note, unit=favorite_option.unit, price_net=favorite_option.price, category=cat_name, manufacturer=producer, origin=origin, ignore=ignore, orig_name=name, orig_unit=unit_info)
+            if int(order_number) in articles_to_ignore:
+                article.ignore = True
                 ignored_articles.append(article)
-            else:
-                articles.append(article)
+            articles.append(article)
 
 for idx in range(20) :
     cat = getSubcategories(idx)
@@ -182,6 +209,7 @@ for idx in range(20) :
     cat = getCategory(idx)
     getArticles(cat)
 
+articles = base.remove_articles_to_ignore(articles)
 articles = base.rename_duplicates(articles)
-base.send_message(supplier, categories, ignored_categories, ignored_subcategories, ignored_articles)
+base.compose_message(supplier, categories, ignored_categories, ignored_subcategories, ignored_articles)
 base.write_csv(supplier=supplier, articles=articles)
