@@ -2,7 +2,8 @@
 - Artikel können per CSV nicht auf inaktiv gesetzt, sondern nur gelöscht werden - ändern?
 
 aktuell:
-- Foodsoft CSV herunterladen & Anpassungen übernehmen
-- Foodsoft -> Mail verschicken
+- config für einzelne Skripte
+(- Foodsoft -> Mail verschicken)
 - Skript auf Anforderung ausführen statt zB wöchentlich, oder irgendwie feststellen, ob die CSV daraufhin auch hochgeladen wurde?
-- Artikelbeschreibung z.B. Zutaten auslesen?
+- Ignore-Feature für Produzenten, Herkunft und Herkunft-startet-mit (z.B. PLZ 2...)
+- Locales

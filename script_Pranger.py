@@ -1,11 +1,12 @@
 from bs4 import BeautifulSoup
 import requests
-import base
 import re
+import base
 
 supplier = "Biohof Pranger"
+supplier_id = 99
 categories_to_ignore = [3, 8]
-subcategories_to_ignore = [25, 26]
+subcategories_to_ignore = [25, 26, 47]
 articles_to_ignore = []
 
 categories = []
@@ -137,6 +138,7 @@ def getArticles(category):
 
         for item in subcat["items"] :
             item_link = item.find(class_="font2 ic3 itemname")['href']
+            item_details = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.222C/"+item_link).text, features="html.parser").body
             order_number = item_link.split("id=")[-1]
             if [x for x in articles if x.order_number == order_number]:
                 continue
@@ -154,7 +156,6 @@ def getArticles(category):
             if producer == "Landwirtschaft Pranger" or producer == "Produktion Biohof A. Pranger e.U.":
                 origin = "eigen"
             else:
-                item_details = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.222C/"+item_link).text,features="html.parser").body
                 address = getIfFound(item_details, "oo-producer-address")
                 if address:
                     origin = address.replace("Österreich", "").replace("AT-", "").replace("A-", "").strip()
@@ -194,8 +195,34 @@ def getArticles(category):
             if not favorite_option:
                 favorite_option = prices[-1]
 
+            item_description = getIfFound(item_details, "autohtml")
+            if item_description and not item_description in note:
+                if note:
+                    if not note [-1] == ".":
+                        note += "."
+                    note += " "
+                note += item_description
+            loop_count = 0
+            while "\n\n" in note:
+                note = note.replace("\n\n", "\n")
+                loop_count += 1
+                if loop_count > 100:
+                    print("\nLoop to replace double line breaks ran 100 times for following note:")
+                    print(note)
+                    break
+            note = note.replace(".\n", ". ").replace("!\n", "! ").replace(";\n", "; ").replace(",\n", ", ").replace(":\n", ": ")
+            note = note.replace("\n", ". ")
+            loop_count = 0
+            while "  " in note:
+                note = note.replace("  ", " ")
+                loop_count += 1
+                if loop_count > 100:
+                    print("\nLoop to replace double whitespaces ran 100 times for following note:")
+                    print(note)
+                    break
+
             cat_name = matchCategories(name=name, note=note, category_number=subcat["number"], cat_name=cat_name)
-            article = base.Article(order_number=order_number, name=name, note=note, unit=favorite_option.unit, price_net=favorite_option.price, category=cat_name, manufacturer=producer, origin=origin, ignore=ignore, orig_name=name, orig_unit=unit_info)
+            article = base.Article(order_number=order_number, name=name, note=note, unit=favorite_option.unit, price_net=favorite_option.price, category=cat_name, manufacturer=producer, origin=origin, ignore=ignore, orig_unit=unit_info)
             if int(order_number) in articles_to_ignore:
                 article.ignore = True
                 ignored_articles.append(article)
@@ -211,5 +238,6 @@ for idx in range(20) :
 
 articles = base.remove_articles_to_ignore(articles)
 articles = base.rename_duplicates(articles)
+articles = base.compare_manual_changes(articles, supplier, supplier_id)
 base.compose_message(supplier, categories, ignored_categories, ignored_subcategories, ignored_articles)
 base.write_csv(supplier=supplier, articles=articles)
