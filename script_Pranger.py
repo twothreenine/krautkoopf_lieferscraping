@@ -3,18 +3,20 @@ import requests
 import re
 import base
 
+# Arguments which should be outsourced into the config file (TODO)
 supplier = "Biohof Pranger"
-supplier_id = 99
+supplier_id = 99 # ID of the supplier in Foodsoft instance
 categories_to_ignore = [3, 8]
 subcategories_to_ignore = [25, 26, 47]
 articles_to_ignore = []
 
+# Global variables
 categories = []
 articles = []
 ignored_categories = []
 ignored_subcategories = []
 ignored_articles = []
-message = []
+notifications = []
 
 menu = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.222C/categories.jsp?intern=1").text, features="html.parser")
 
@@ -238,6 +240,6 @@ for idx in range(20) :
 
 articles = base.remove_articles_to_ignore(articles)
 articles = base.rename_duplicates(articles)
-articles = base.compare_manual_changes(articles, supplier, supplier_id)
-base.compose_message(supplier, categories, ignored_categories, ignored_subcategories, ignored_articles)
-base.write_csv(supplier=supplier, articles=articles)
+articles, notifications = base.compare_manual_changes(articles=articles, supplier=supplier, supplier_id=supplier_id, notifications=notifications)
+notifications = base.write_csv(supplier=supplier, articles=articles, notifications=notifications)
+base.compose_message(supplier=supplier, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications)

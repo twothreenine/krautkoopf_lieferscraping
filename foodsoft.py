@@ -61,7 +61,6 @@ class FSConnector:
 
         return response
 
-
     def login(self, user, password):
         self._user = user
         self._login_data['nick'] = user
@@ -80,47 +79,7 @@ class FSConnector:
     def logout(self):
         self._session.close()
         
-        
-    def getCSV(self):
-        mail_header = self._default_header
-
-        print(self._url_article_csv)
-        response = self._get(self._url_article_csv, mail_header)
+    def get_articles_CSV(self):
+        response = self._get(self._url_article_csv, self._default_header)
         decoded_content = response.content.decode('utf-8')
         return decoded_content
-
-        # msg_data = {
-        #     "utf8":"%25E2%259C%2593",#"✓",
-        #     "message[reply_to]":"",
-        #     "message[send_method]":"recipients",
-        #     "message[workgroup_id]":"0",
-        #     "message[ordergroup_id]":"0",
-        #     "message[order_id]":"0",
-        #     "message[recipient_tokens]":",".join(map(str,userIds)),
-        #     "message[private]":["0","1"],
-        #     "message[subject]":data["subject"],
-        #     "message[body]":data["body"],
-        #     "commit":"Nachricht+verschicken"
-        #     }
-        # mail_header["Referer"] = self._url_mail_request
-        # response = self._post(self._url_mail_send, mail_header, msg_data, response)
-        # logging.debug("Sent messages to " + ",".join(map(str,userIds)) + " header= " + str(response.request.headers) + " data= " + str(msg_data))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
