@@ -3,12 +3,20 @@ import requests
 import re
 import base
 
-# Arguments which should be outsourced into the config file (TODO)
 supplier = "Biohof Pranger"
-supplier_id = 99 # ID of the supplier in Foodsoft instance
-categories_to_ignore = [3, 8]
-subcategories_to_ignore = [25, 26, 47]
+config = base.read_config(supplier)
+supplier_id = None
+if "Foodsoft supplier ID" in config:
+    supplier_id = config["Foodsoft supplier ID"]
+categories_to_ignore = []
+if "categories to ignore" in config:
+    categories_to_ignore = config["categories to ignore"]
+subcategories_to_ignore = []
+if "subcategories to ignore" in config:
+    subcategories_to_ignore = config["subcategories to ignore"]
 articles_to_ignore = []
+if "articles to ignore" in config:
+    articles_to_ignore = config["articles to ignore"]
 
 # Global variables
 categories = []
@@ -130,6 +138,9 @@ def matchCategories(name, note, category_number, cat_name):
     else:
         return cat_name
 
+def baseprice_suffix(base_price, base_unit):
+    return " ({}€/{})".format("{:.2f}".format(base_price).replace(".", ","), base_unit)
+
 def getArticles(category):
     for subcat in category:
         if subcat["items"] == [] : 
@@ -144,7 +155,7 @@ def getArticles(category):
             order_number = item_link.split("id=")[-1]
             if [x for x in articles if x.order_number == order_number]:
                 continue
-            title = item.find(class_="font2 ic3 itemname").text.replace("Bio-", "").replace(" Pkg.", "").replace(" PKG.", "").replace(" Pkg", "").replace(" PKG", "").replace(" Stk.", "").replace(" Bd.", "").replace(" Str.", "").replace(" Fl.", "").replace(" kg", "").strip()
+            title = item.find(class_="font2 ic3 itemname").text.replace("Bio-", "").replace(" Pkg.", "").replace(" PKG.", "").replace(" Pkg", "").replace(" PKG", "").replace(" Stk.", "").replace(" Bd.", "").replace(" Str.", "").replace(" Fl.", "").replace(" kg", "").replace(" Glas", "").replace(" Dose", "").strip()
             title_contents = re.split("(.+)\s(\d.?\d*.?\S+)\s?([a-zA-Z]*)", title)
             if len(title_contents) > 1:
                 name = title_contents[1]
@@ -164,10 +175,13 @@ def getArticles(category):
                 else:
                     origin = getIfFound(item, "herkunft")
 
+            base_raw = item.find(class_="price ic2")
+            base_price, base_unit = ''.join(base_raw.find_all(text=True, recursive=False)).strip().split("€/")
+            base_price = float(base_price)
             price_options = item.find(class_="font2 ic2 baseprice")
             prices = []
-            for option in price_options.find_all("option") + price_options.find_all(class_="oo-item-price") :
-                price, unit = option.get_text().strip().replace("ca. ", "").split("€/")
+            for option in price_options.find_all("option") + price_options.find_all(class_="oo-item-price"):
+                price, unit = option.get_text().strip().replace("ca. ", "").replace("ca.", "").split("€/")
                 new_option = PriceOption(float(price), unit)
                 prices.append(new_option)
 
@@ -180,22 +194,46 @@ def getArticles(category):
                     if len(unit_in_note) > 1:
                         unit_info = unit_in_note[1]
                         note = note.replace(unit_in_note[1], "").strip()
+                unit_info = unit_info.replace("1kg kg", "1kg").replace("Lit.", "L").replace("Lit", "L")
                 if unit_info:
-                    prices[0].unit = unit_info + " " + prices[0].unit
+                    if prices[0].unit not in unit_info:
+                        separator = ""
+                        if note:
+                            if not str(prices[0].unit)[-1] == ".":
+                                separator = "."
+                            separator += " "
+                        note = str(prices[0].unit) + separator + note
+                        prices[0].unit = unit_info
 
             for price in prices:
-                price.unit = price.unit.replace("1kg kg", "1kg")
+                price.unit = price.unit.replace("1kg kg", "1kg").replace("Lit.", "L").replace("Lit", "L").replace("ca. ", "").replace("ca.", "")
                 if len(price.unit) > 15:
                     price.unit = price.unit.replace("Flasche", "Fl.").replace("Packung", "Pkg.").replace("Stück", "Stk")
 
-            prices.sort(key=lambda x: x.price)
+            # Krautkoopf-specific way of finding the best fitting unit/price option for us
             favorite_option = None
-            for option in prices:
-                if option.price >= 1:
-                    favorite_option = option
-                    break
+            piece_options = [x for x in prices if x.unit == "Stück" or x.unit == "Traube" or "Stk" in x.unit]
+            if len(prices) == 1:
+                if base_unit == "kg" and prices[0].unit not in ["kg", "1kg", "Kg"]:
+                    name += baseprice_suffix(base_price, base_unit)
+            elif piece_options:
+                favorite_option = piece_options[0]
+                if base_unit == "kg":
+                    name += baseprice_suffix(base_price, base_unit)
+            else:
+                prices.sort(key=lambda x: x.price)
+                other_options = [x for x in prices if x.unit != base_unit]
+                if base_unit == "kg" and other_options:
+                    if other_options[0].price < base_price:
+                        half_kg_option = PriceOption(price=base_price / 2, unit="500g")
+                        prices.append(half_kg_option)
+                        favorite_option = half_kg_option
             if not favorite_option:
-                favorite_option = prices[-1]
+                kg_options = [x for x in prices if x.unit == "kg"]
+                if kg_options:
+                    favorite_option = kg_options[0]
+                else:
+                    favorite_option = prices[0]
 
             item_description = getIfFound(item_details, "autohtml")
             if item_description and not item_description in note:
@@ -228,6 +266,10 @@ def getArticles(category):
             if int(order_number) in articles_to_ignore:
                 article.ignore = True
                 ignored_articles.append(article)
+            # specifically for Krautkoopf:
+            elif (subcat["number"] == "s43" or subcat["number"] == "5") and "birne" in name.casefold() and "quitte" not in name.casefold():
+                article.ignore = True
+                ignored_articles.append(article)
             articles.append(article)
 
 for idx in range(20) :
@@ -240,6 +282,6 @@ for idx in range(20) :
 
 articles = base.remove_articles_to_ignore(articles)
 articles = base.rename_duplicates(articles)
-articles, notifications = base.compare_manual_changes(articles=articles, supplier=supplier, supplier_id=supplier_id, notifications=notifications)
-notifications = base.write_csv(supplier=supplier, articles=articles, notifications=notifications)
+articles, notifications, foodcoop_name = base.compare_manual_changes(articles=articles, supplier=supplier, supplier_id=supplier_id, notifications=notifications)
+notifications = base.write_csv(supplier=supplier, foodcoop_name=foodcoop_name, articles=articles, notifications=notifications)
 base.compose_message(supplier=supplier, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications)
