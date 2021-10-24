@@ -6,6 +6,8 @@
     </head>
 
     <body>
-        <p>{{foodcoop}} scheint nicht deine verknüpfte Foodsoft-Instanz zu sein. Überprüfe die URL.</p>
+        <div>
+            <p>{{foodcoop}} scheint nicht deine verknüpfte Foodsoft-Instanz zu sein. Überprüfe die URL.</p>
+        </div>
     </body>
 </html>

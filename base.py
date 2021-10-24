@@ -29,8 +29,22 @@ class Category:
         self.name = name
         self.subcategories = subcategories
 
-def read_config(supplier="", ensure_subconfig=""):
-    with open("config.json") as json_file:
+def remove_double_strings_loop(text, string, description=None, number_of_runs=100):
+    loop_count = 0
+    while string+string in text:
+        text = text.replace(string+string, string)
+        loop_count += 1
+        if loop_count > number_of_runs:
+            if not description:
+                description = "'" + string + "'"
+            print("\nLoop to replace double " + description + " ran " + number_of_runs + " times for following text:")
+            print(text)
+            break
+    return text
+
+def read_config(foodcoop, supplier="", ensure_subconfig=""):
+    filename = "config_" + foodcoop + ".json"
+    with open(filename) as json_file:
         config = json.load(json_file)
     if supplier:
         if supplier not in config:
@@ -44,34 +58,45 @@ def read_config(supplier="", ensure_subconfig=""):
     else:
         return config
 
-def save_supplier_config(supplier, supplier_config):
-    with open("config.json") as json_file:
+def read_in_config(config, detail, alternative=None):
+    if detail in config:
+        return config[detail]
+    else:
+        return alternative
+
+def save_supplier_config(foodcoop, supplier, supplier_config):
+    filename = "config_" + foodcoop + ".json"
+    with open(filename) as json_file:
         config = json.load(json_file)
     if supplier not in config:
         config[supplier] = {}
     config[supplier] = supplier_config
-    with open("config.json", "w") as json_file:
+    with open(filename, "w") as json_file:
         json.dump(config, json_file, indent=4)
 
 def read_foodsoft_config():
-    foodcoop_name = "unnamed foodcoop"
+    foodcoop = "unnamed foodcoop"
     foodsoft_url = None
     if 'TR_FOODSOFT_URL' in os.environ:
         foodsoft_url = os.environ['TR_FOODSOFT_URL']
-        foodcoop_name_list = re.split(".*/(.*)/", foodsoft_url)
-        if len(foodcoop_name_list) < 2:
+        foodcoop_list = re.split(".*/(.*)/", foodsoft_url)
+        if len(foodcoop_list) < 2:
             print("Could not extract foodcoop name from url " + foodsoft_url)
         else:
-            foodcoop_name = foodcoop_name_list[1]
+            foodcoop = foodcoop_list[1]
     foodsoft_user = None
     foodsoft_password = None
     if 'TR_FOODSOFT_USER' in os.environ and 'TR_FOODSOFT_PASS' in os.environ:
         foodsoft_user = os.environ['TR_FOODSOFT_USER']
         foodsoft_password = os.environ['TR_FOODSOFT_PASS']
-    return foodcoop_name, foodsoft_url, foodsoft_user, foodsoft_password
+    return foodcoop, foodsoft_url, foodsoft_user, foodsoft_password
 
-def get_outputs(foodcoop_name, supplier):
-    return [f for f in os.listdir("output/" + foodcoop_name + "/" + supplier) if os.path.isfile(os.path.join("output/" + foodcoop_name + "/" + supplier, f))]
+def get_outputs(foodcoop, supplier):
+    path = "output/" + foodcoop + "/" + supplier
+    if os.path.exists(path):
+        return [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    else:
+        return []
 
 def remove_articles_to_ignore(articles):
     return [x for x in articles if not x.ignore]
@@ -174,13 +199,13 @@ def compare_string(article, article_from_last_run, article_from_foodsoft, string
             setattr(article, string_type, manual_string)
     return article, supplier_config
 
-def compare_manual_changes(articles, supplier, supplier_id, notifications=[], compare_name=True, compare_note=True, compare_manufacturer=True, compare_origin=True, compare_unit=True, compare_price=True, compare_vat=False, compare_deposit=False, compare_unit_quantity=False, compare_category=True):
+def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notifications=[], compare_name=True, compare_note=True, compare_manufacturer=True, compare_origin=True, compare_unit=True, compare_price=True, compare_vat=False, compare_deposit=False, compare_unit_quantity=False, compare_category=True):
     # This is an optional method which checks if article data has been modified manually in Foodsoft after the last CSV was created.
     # In case the article data in the source did not change since the last run of the script and the article data from your Foodsoft instance differs, latter is adopted.
 
     # Extract the configuration for this supplier
-    supplier_config = read_config(supplier=supplier, ensure_subconfig="manual changes")
-    foodcoop_name, foodsoft_url, foodsoft_user, foodsoft_password = read_foodsoft_config()
+    supplier_config = read_config(foodcoop=foodcoop, supplier=supplier, ensure_subconfig="manual changes")
+    foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = read_foodsoft_config()
 
     # Connect to your Foodsoft instance and download the articles CSV of the supplier
     if foodsoft_url and foodsoft_user and foodsoft_password:
@@ -191,12 +216,12 @@ def compare_manual_changes(articles, supplier, supplier_id, notifications=[], co
         articles_from_foodsoft = []
 
     # Find the last CSV created by the script
-    files = get_outputs(foodcoop_name=foodcoop_name, supplier=supplier)
+    files = get_outputs(foodcoop=foodcoop, supplier=supplier)
     if not files:
         notifications.append("No previous CSV found for comparison.")
     last_csv = files[-1] # TODO: It should be saved in a Config file which CSV was last imported, and then be chosen here
     notifications.append("It was assumed '" + last_csv + "' was the last CSV imported into Foodsoft.")
-    with open("output/" + foodcoop_name + "/" + supplier + "/" + last_csv, newline='', encoding='utf-8') as csvfile:
+    with open("output/" + foodcoop + "/" + supplier + "/" + last_csv, newline='', encoding='utf-8') as csvfile:
         last_csv_opened = csv.reader(csvfile, delimiter=';')
         articles_from_last_run = read_articles_from_csv(last_csv_opened)
 
@@ -243,9 +268,9 @@ def compare_manual_changes(articles, supplier, supplier_id, notifications=[], co
                 supplier_config["manual changes"][article.order_number]["category"] = article_from_foodsoft.category
                 article.category = article_from_foodsoft.category
 
-    save_supplier_config(supplier=supplier, supplier_config=supplier_config)
+    save_supplier_config(foodcoop=foodcoop, supplier=supplier, supplier_config=supplier_config)
 
-    return articles, notifications, foodcoop_name
+    return articles, notifications
 
 def validate_string(string, string_type, article, notifications):
     # Check if unit, name, and other strings exceed the respective character limit, and shorten them if so
@@ -300,7 +325,7 @@ def listCategories(categories):
     return txt
 
 def compose_message(supplier, supplier_id, categories, ignored_categories, ignored_subcategories, ignored_articles, notifications):
-    foodcoop_name, foodsoft_url, foodsoft_user, foodsoft_password = read_foodsoft_config()
+    foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = read_foodsoft_config()
     text = "Anbei die Liste an automatisch ausgelesenen Artikeln von " + supplier + ".\n"
     if foodsoft_url:
         text += "Sie kann unter folgendem Link hochgeladen werden: (Häkchen bei 'Artikel löschen, die nicht in der hochgeladenen Datei sind' setzen!)\n"
@@ -326,23 +351,23 @@ def compose_message(supplier, supplier_id, categories, ignored_categories, ignor
         text += "\nHinweise:"
         for notification in notifications:
             text += "\n- " + notification
-    print(text)
+    return text
 
-def write_csv(supplier, foodcoop_name, articles, notifications=[]):
+def write_csv(foodcoop, supplier, articles, notifications=[]):
     rows, notifications = get_data_from_articles(articles=articles, notifications=notifications)
 
     if not os.path.exists("output"):
         os.makedirs("output")
-    if not os.path.exists("output/" + foodcoop_name):
-        os.makedirs("output/" + foodcoop_name)
-    if not os.path.exists("output/" + foodcoop_name + "/" + supplier):
-        os.makedirs("output/" + foodcoop_name + "/" + supplier)
+    if not os.path.exists("output/" + foodcoop):
+        os.makedirs("output/" + foodcoop)
+    if not os.path.exists("output/" + foodcoop + "/" + supplier):
+        os.makedirs("output/" + foodcoop + "/" + supplier)
     file_name = supplier + datetime.date.today().isoformat()
     number = 1
-    while os.path.isfile('output/' + foodcoop_name + '/' + supplier + '/' + file_name + '_' + str(number) + '.csv'):
+    while os.path.isfile('output/' + foodcoop + '/' + supplier + '/' + file_name + '_' + str(number) + '.csv'):
         number += 1
 
-    with open('output/' + foodcoop_name + '/' + supplier + '/' + file_name + '_' + str(number) + '.csv', 'w', encoding='UTF8', newline='') as f:
+    with open('output/' + foodcoop + '/' + supplier + '/' + file_name + '_' + str(number) + '.csv', 'w', encoding='UTF8', newline='') as f:
         writer = csv.writer(f, delimiter=';')
         writer.writerow(['avail.', 'Order number', 'Name', 'Note', 'Manufacturer', 'Origin', 'Unit', 'Price (net)', 'VAT', 'Deposit', 'Unit quantity', '', '', 'Category'])
         writer.writerows(rows)

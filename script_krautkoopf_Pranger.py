@@ -3,21 +3,6 @@ import requests
 import re
 import base
 
-supplier = "Biohof Pranger"
-config = base.read_config(supplier)
-supplier_id = None
-if "Foodsoft supplier ID" in config:
-    supplier_id = config["Foodsoft supplier ID"]
-categories_to_ignore = []
-if "categories to ignore" in config:
-    categories_to_ignore = config["categories to ignore"]
-subcategories_to_ignore = []
-if "subcategories to ignore" in config:
-    subcategories_to_ignore = config["subcategories to ignore"]
-articles_to_ignore = []
-if "articles to ignore" in config:
-    articles_to_ignore = config["articles to ignore"]
-
 # Global variables
 categories = []
 articles = []
@@ -25,6 +10,10 @@ ignored_categories = []
 ignored_subcategories = []
 ignored_articles = []
 notifications = []
+supplier_id = None
+categories_to_ignore = []
+subcategories_to_ignore = []
+articles_to_ignore = []
 
 menu = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.222C/categories.jsp?intern=1").text, features="html.parser")
 
@@ -242,24 +231,10 @@ def getArticles(category):
                         note += "."
                     note += " "
                 note += item_description
-            loop_count = 0
-            while "\n\n" in note:
-                note = note.replace("\n\n", "\n")
-                loop_count += 1
-                if loop_count > 100:
-                    print("\nLoop to replace double line breaks ran 100 times for following note:")
-                    print(note)
-                    break
+            note = base.remove_double_strings_loop(text=note, string="\n", description="line breaks")
             note = note.replace(".\n", ". ").replace("!\n", "! ").replace(";\n", "; ").replace(",\n", ", ").replace(":\n", ": ")
             note = note.replace("\n", ". ")
-            loop_count = 0
-            while "  " in note:
-                note = note.replace("  ", " ")
-                loop_count += 1
-                if loop_count > 100:
-                    print("\nLoop to replace double whitespaces ran 100 times for following note:")
-                    print(note)
-                    break
+            note = base.remove_double_strings_loop(text=note, string=" ", description="whitespaces")
 
             cat_name = matchCategories(name=name, note=note, category_number=subcat["number"], cat_name=cat_name)
             article = base.Article(order_number=order_number, name=name, note=note, unit=favorite_option.unit, price_net=favorite_option.price, category=cat_name, manufacturer=producer, origin=origin, ignore=ignore, orig_unit=unit_info)
@@ -272,16 +247,38 @@ def getArticles(category):
                 ignored_articles.append(article)
             articles.append(article)
 
-for idx in range(20) :
-    cat = getSubcategories(idx)
-    getArticles(cat)
+def run(foodcoop, supplier):
+    config = base.read_config(foodcoop, supplier)
+    global supplier_id
+    supplier_id = base.read_in_config(config, "Foodsoft supplier ID", None)
+    global categories_to_ignore
+    categories_to_ignore = base.read_in_config(config, "categories to ignore", [])
+    global subcategories_to_ignore
+    subcategories_to_ignore = base.read_in_config(config, "subcategories to ignore", [])
+    global articles_to_ignore
+    articles_to_ignore = base.read_in_config(config, "articles to ignore", [])
 
-for idx in range(20) :
-    cat = getCategory(idx)
-    getArticles(cat)
+    for idx in range(20) :
+        cat = getSubcategories(idx)
+        getArticles(cat)
 
-articles = base.remove_articles_to_ignore(articles)
-articles = base.rename_duplicates(articles)
-articles, notifications, foodcoop_name = base.compare_manual_changes(articles=articles, supplier=supplier, supplier_id=supplier_id, notifications=notifications)
-notifications = base.write_csv(supplier=supplier, foodcoop_name=foodcoop_name, articles=articles, notifications=notifications)
-base.compose_message(supplier=supplier, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications)
+    for idx in range(20) :
+        cat = getCategory(idx)
+        getArticles(cat)
+
+    global articles
+    global notifications
+    articles = base.remove_articles_to_ignore(articles)
+    articles = base.rename_duplicates(articles)
+    articles, notifications = base.compare_manual_changes(foodcoop=foodcoop, supplier=supplier, supplier_id=supplier_id, articles=articles, notifications=notifications)
+    notifications = base.write_csv(foodcoop=foodcoop, supplier=supplier, articles=articles, notifications=notifications)
+    return base.compose_message(supplier=supplier, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications)
+
+def config_variables(): # Lists the special config variables this script uses and for each of them: whether they are required, example
+    return {"categories to ignore": {"required": False, "example": [2, 3, 9]},
+            "subcategories to ignore": {"required": False, "example": [3, 51]},
+            "articles to ignore": {"required": False, "example": [24245, 23953]}}
+
+if __name__ == "__main__":
+    message = run(foodcoop="krautkoopf", supplier="Biohof Pranger")
+    print(message)
