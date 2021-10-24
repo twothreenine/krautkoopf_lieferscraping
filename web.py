@@ -3,6 +3,7 @@ import re
 import base
 import os
 import numbers
+import json
 
 foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = base.read_foodsoft_config()
 logged_in = False
@@ -35,15 +36,31 @@ def available_scripts():
             foodcoop_scripts.append(f_parts)
     return generic_scripts, foodcoop_scripts
 
+def script_options(selected_script=None):
+    generic_scripts, foodcoop_scripts = available_scripts()
+    script_options = "<option value=''>Skript auswählen</option>"
+    for script in generic_scripts:
+        value = script[0] + "_" + script[1]
+        selected = ""
+        if value == selected_script:
+            selected = "selected"
+        script_options += "<option value='{}' {}>{}</option>".format(value, selected, script[1])
+    for script in foodcoop_scripts:
+        value = script[0] + "_" + script[1]
+        selected = ""
+        if value == selected_script:
+            selected = "selected"
+        script_options += "<option value='{}' {}>{}</option>".format(value, selected, script[0].capitalize() + ": " + script[1])
+    return script_options
+
 def get_script_name(supplier):
     config = base.read_config(foodcoop=foodcoop, supplier=supplier, ensure_subconfig="Script name")
     script = "script_" + config["Script name"]
     return script
 
-def output_download_button(supplier, output):
-    source = "/download/" + supplier + "/" + output
-    # source = "/download/Notizen.txt"
-    return "<a href='{}' class='button' download>⤓</a> ".format(source)
+def output_with_download_button(supplier, output):
+    source = "/" + foodcoop + "/" + supplier + "/download/" + output
+    return "<form action='{}'><input type='submit' value='⤓'> {}</form>".format(source, output)
 
 def add_supplier(submitted_form):
     new_config_name = submitted_form.get('new config name')
@@ -60,6 +77,28 @@ def add_supplier(submitted_form):
             return edit_supplier_page(supplier=new_config_name)
         else:
             return main_page()
+
+def save_supplier_edit(supplier, submitted_form):
+    config = base.read_config(foodcoop=foodcoop, supplier=supplier)
+    for name in submitted_form:
+        value = submitted_form.get(name)
+        if value:
+            if value.startswith("[") and value.endswith("]"):
+                try:
+                    value = json.loads(value)
+                except:
+                    raise
+            else:
+                try:
+                    value = int(value)
+                except ValueError:
+                    pass
+                except:
+                    raise
+            config[name] = value
+        elif name in config:
+            config.pop(name)
+    base.save_supplier_config(foodcoop=foodcoop, supplier=supplier, supplier_config=config)
 
 def main_page():
     content = ""
@@ -94,7 +133,7 @@ def supplier_page(supplier):
             break
         if output_content:
             output_content += "<br/>"
-        output_content += output_download_button(supplier=supplier, output=outputs[index]) + str(outputs[index])
+        output_content += output_with_download_button(supplier=supplier, output=outputs[index])
     config_content = ""
     config = base.read_config(foodcoop=foodcoop, supplier=supplier)
     for detail in config:
@@ -113,6 +152,8 @@ def edit_supplier_page(supplier):
     script = __import__(get_script_name(supplier=supplier))
     config_variables = script.config_variables()
     for detail in config:
+        if detail == "Script name" or detail == "Foodsoft supplier ID":
+            continue
         if config_content:
             config_content += "<br/>"
         config_content += str(detail) + ": "
@@ -136,16 +177,32 @@ def edit_supplier_page(supplier):
             if config[detail]:
                 value = "value='" + str(config[detail]) + "'"
             config_content += "<input name='{}' type='{}' {} {} {}>".format(detail, input_type, value, placeholder, required)
-    return bottle.template('templates/edit_supplier.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), supplier=supplier, config_content=config_content)
+
+    for variable, details in config_variables.items():
+        if variable in config:
+            continue
+        if config_content:
+            config_content += "<br/>"
+        config_content += str(variable) + ": "
+        input_type = "text"
+        placeholder = ""
+        required = ""
+        if "example" in details:
+            if isinstance(details["example"], numbers.Number):
+                input_type = "number"
+            placeholder = "placeholder='" + str(details["example"]) + "'"
+        if "required" in details:
+            if details["required"]:
+                required = "required"
+        config_content += "<input name='{}' type='{}' {} {}>".format(variable, input_type, placeholder, required)
+
+    foodsoft_supplier_id = ""
+    if "Foodsoft supplier ID" in config:
+        foodsoft_supplier_id = config["Foodsoft supplier ID"]
+    return bottle.template('templates/edit_supplier.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), supplier=supplier, config_content=config_content, script_options=script_options(selected_script=config["Script name"]), fs_supplier_id=foodsoft_supplier_id)
 
 def new_supplier_page():
-    generic_scripts, foodcoop_scripts = available_scripts()
-    script_options = "<option value=''>Skript auswählen</option>"
-    for script in generic_scripts:
-        script_options += "<option value='{}'>{}</option>".format(script[0] + "_" + script[1], script[1])
-    for script in foodcoop_scripts:
-        script_options += "<option value='{}'>{}</option>".format(script[0] + "_" + script[1], script[0].capitalize() + ": " + script[1])
-    return bottle.template('templates/new_supplier.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), script_options=script_options)
+    return bottle.template('templates/new_supplier.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), script_options=script_options())
 
 @bottle.route('/<fc>')
 def login(fc):
@@ -187,6 +244,16 @@ def supplier(fc, supplier):
     else:
         return login_page(fc)
 
+@bottle.route('/<fc>/<supplier>', method='POST')
+def save_supplier(fc, supplier):
+    global logged_in
+    if logged_in:
+        save_supplier_edit(supplier=supplier, submitted_form=bottle.request.forms)
+        messages.append("Änderungen in Konfiguration gespeichert.")
+        return supplier_page(supplier)
+    else:
+        return login_page(fc)
+
 @bottle.route('/<fc>/<supplier>/run')
 def run_script(fc, supplier):
     global logged_in
@@ -206,12 +273,12 @@ def edit_supplier(fc, supplier):
     else:
         return login_page(fc)
 
-@bottle.route('/download/<supplier>/<filename:path>')
-def download(supplier, filename):
+@bottle.route('/<fc>/<supplier>/download/<filename:path>')
+def download(fc, supplier, filename):
     print(filename)
     global logged_in
     if logged_in:
-        return bottle.static_file(filename, root="output/" + supplier, download=filename)
+        return bottle.static_file(filename, root="output/" + foodcoop + "/" + supplier, download=filename)
     else:
         return login_page(fc)
 

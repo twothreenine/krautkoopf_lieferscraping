@@ -7,15 +7,15 @@
 
     <body>
         <div>
-            <p><a href="/{{fc}}" class='button'>Zurück zum Hauptmenü</a></p>
+            <form action="/{{fc}}"><input type='submit' value='Zurück zum Hauptmenü'></form>
             <p>{{messages}}</p>
             <h1>{{supplier}}</h1>
-            <p><a href="/{{fc}}/{{supplier}}/run" class='button'>Skript jetzt ausführen</a></p>
+            <form action="/{{fc}}/{{supplier}}/run"><input type='submit' value='Skript ausführen'></form>
             <h2>Zuletzt erstellte CSVs</h2>
             <p>{{!output_content}}</p>
             <h2>Konfiguration</h2>
-            <p><a href="/{{fc}}/{{supplier}}/edit" class='button'>Bearbeiten</a></p>
-            <p>{{!config_content}}</p>
+            <p><form action="/{{fc}}/{{supplier}}/edit"><input type='submit' value='Bearbeiten'></form>
+            {{!config_content}}</p>
         </div>
     </body>
 </html>

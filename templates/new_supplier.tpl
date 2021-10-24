@@ -7,7 +7,7 @@
 
     <body>
         <div>
-            <p><a href="/{{fc}}" class='button'>Zurück zum Hauptmenü</a></p>
+            <form action="/{{fc}}"><input type='submit' value='Zurück zum Hauptmenü'></form>
             <p>{{messages}}</p>
             <h1>Neue Konfiguration</h1>
             <form action="/{{fc}}" method="post">

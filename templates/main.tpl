@@ -8,7 +8,8 @@
     <body>
         <div>
             <p>{{messages}}</p>
-            <p>Hinterlegte Skript-Konfigurationen für {{foodcoop}}:</p>
+            <h1>{{foodcoop}} Lieferscraping</h1>
+            <h2>Skript-Konfigurationen</h2>
             <p>{{!suppliers}}</p>
             <form action="/{{fc}}" method="post">
                 <input name="new supplier" value="Neue Konfiguration anlegen" type="submit" />
