@@ -77,8 +77,8 @@ def save_supplier_config(foodcoop, supplier, supplier_config):
 def read_foodsoft_config():
     foodcoop = "unnamed foodcoop"
     foodsoft_url = None
-    if 'TR_FOODSOFT_URL' in os.environ:
-        foodsoft_url = os.environ['TR_FOODSOFT_URL']
+    if 'LS_FOODSOFT_URL' in os.environ:
+        foodsoft_url = os.environ['LS_FOODSOFT_URL']
         foodcoop_list = re.split(".*/(.*)/", foodsoft_url)
         if len(foodcoop_list) < 2:
             print("Could not extract foodcoop name from url " + foodsoft_url)
@@ -86,9 +86,9 @@ def read_foodsoft_config():
             foodcoop = foodcoop_list[1]
     foodsoft_user = None
     foodsoft_password = None
-    if 'TR_FOODSOFT_USER' in os.environ and 'TR_FOODSOFT_PASS' in os.environ:
-        foodsoft_user = os.environ['TR_FOODSOFT_USER']
-        foodsoft_password = os.environ['TR_FOODSOFT_PASS']
+    if 'LS_FOODSOFT_USER' in os.environ and 'LS_FOODSOFT_PASS' in os.environ:
+        foodsoft_user = os.environ['LS_FOODSOFT_USER']
+        foodsoft_password = os.environ['LS_FOODSOFT_PASS']
     return foodcoop, foodsoft_url, foodsoft_user, foodsoft_password
 
 def get_outputs(foodcoop, supplier):
