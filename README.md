@@ -5,8 +5,11 @@ Scripts for specific suppliers get data from their webshop (screen-scraping), sp
 
 ## Requirements
 python v3.8+
+
 beautifulsoup4
+
 requests v2.24+
+
 bottle v0.12+
 
 ## Environment variables
