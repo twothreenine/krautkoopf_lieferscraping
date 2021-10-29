@@ -274,10 +274,15 @@ def run(foodcoop, supplier):
     notifications = base.write_csv(foodcoop=foodcoop, supplier=supplier, articles=articles, notifications=notifications)
     return base.compose_message(supplier=supplier, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications)
 
-def config_variables(): # Lists the special config variables this script uses and for each of them: whether they are required, example
+def config_variables(): # List of the special config variables this script uses and for each of them: whether they are required, example
     return {"categories to ignore": {"required": False, "example": [2, 3, 9]},
             "subcategories to ignore": {"required": False, "example": [3, 51]},
             "articles to ignore": {"required": False, "example": [24245, 23953]}}
+
+def info(): # Info whether the script requests (takes) a file and whether it returns (generates) a file
+    requests_file = False
+    returns_file = True
+    return requests_file, returns_file
 
 if __name__ == "__main__":
     message = run(foodcoop="krautkoopf", supplier="Biohof Pranger")

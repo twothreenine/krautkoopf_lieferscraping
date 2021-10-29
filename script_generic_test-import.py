@@ -13,6 +13,11 @@ def config_variables(): # Lists the special config variables this script uses an
     return {"Test": {"required": False, "example": 43},
             "Test2": {"required": True, "example": [34, 92]}}
 
+def info(): # Info whether the script requests (takes) a file and whether it returns (generates) a file
+    requests_file = False
+    returns_file = True
+    return requests_file, returns_file
+
 if __name__ == "__main__":
     message = run(foodcoop="Test coop", supplier="Test supplier")
     print(message)
