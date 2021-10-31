@@ -4,6 +4,7 @@ import base
 import os
 import numbers
 import json
+from zipfile import ZipFile
 
 foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = base.read_foodsoft_config()
 logged_in = False
@@ -22,6 +23,9 @@ def read_messages():
 
 def supplier_link(supplier):
     return bottle.template("<a href='/{{foodcoop}}/{{supplier}}'>{{supplier}}</a>", foodcoop=foodcoop, supplier=supplier)
+
+def display_output_link(supplier, run):
+    return bottle.template("<a href='/{{foodcoop}}/{{supplier}}/display/{{run}}'>{{run}}</a>", foodcoop=foodcoop, supplier=supplier, run=run)
 
 def available_scripts():
     script_files = [f for f in os.listdir() if f.startswith("script_") and f.endswith(".py")]
@@ -58,9 +62,59 @@ def get_script_name(supplier):
     script = "script_" + config["Script name"]
     return script
 
-def output_with_download_button(supplier, output):
-    source = "/" + foodcoop + "/" + supplier + "/download/" + output
-    return "<form action='{}'><input type='submit' value='⤓'> {}</form>".format(source, output)
+def run_path(supplier, run):
+    return os.path.join("output", foodcoop, supplier, run)
+
+def list_files(path, folder="download"):
+    return [f for f in os.listdir(os.path.join(path, folder))]
+
+def zip_download(supplier, run):
+    path = run_path(supplier, run)
+    files = list_files(path)
+    zip_filepath = os.path.join(path, supplier + "_" + run + ".zip")
+    if not os.path.isfile(zip_filepath):
+        with ZipFile(zip_filepath, 'w') as zipObj:
+            for file in files:
+                download_filepath = os.path.join(path, "download", file)
+                zipObj.write(download_filepath, os.path.basename(download_filepath))
+    source = "/download/" + zip_filepath
+    return source
+
+def output_link_with_download_button(supplier, run):
+    path = run_path(supplier, run)
+    files = list_files(path)
+    output_link = display_output_link(supplier, run)
+    if files:
+        if len(files) == 1:
+            source = "/download/output/" + foodcoop + "/" + supplier + "/" + run + "/download/" + files[0]
+        else:
+            source = zip_download(supplier, run)
+        return bottle.template('templates/download_button.tpl', source=source, value="⤓", affix=" " + output_link)
+    else:
+        return output_link
+
+def all_download_buttons(supplier, run):
+    content = ""
+    path = run_path(supplier, run)
+    files = [f for f in os.listdir(os.path.join(path, "download"))]
+    if len(files) > 1:
+        content += bottle.template('templates/download_button.tpl', source=zip_download(supplier, run), value="⤓ ZIP", affix="")
+    for file in files:
+        source = "/download/output/" + foodcoop + "/" + supplier + "/" + run + "/download/" + file
+        content += bottle.template('templates/download_button.tpl', source=source, value="⤓ " + file, affix="")
+    return content
+
+def display_content(path, display_type="display"):
+    display_content = ""
+    file_path = os.path.join(path, display_type)
+    if os.path.exists(file_path):
+        files = [f for f in os.listdir(file_path)]
+        for file in files:
+            with open(os.path.join(path, display_type, file), encoding="utf-8") as text_file:
+                content = text_file.read().replace("\n", "<br>")
+            title = os.path.splitext(file)[0]
+            display_content += bottle.template('templates/{}_content.tpl'.format(display_type), title=title, content=content)
+    return display_content
 
 def add_supplier(submitted_form):
     new_config_name = submitted_form.get('new config name')
@@ -126,14 +180,14 @@ def supplier_page(supplier):
     output_content = ""
     outputs = base.get_outputs(foodcoop=foodcoop, supplier=supplier)
     if not outputs:
-        output_content += "Keine CSVs vorhanden."
+        output_content += "Keine Ausführungen gefunden."
     outputs.reverse()
     for index in range(5):
         if index+1 > len(outputs):
             break
         if output_content:
             output_content += "<br/>"
-        output_content += output_with_download_button(supplier=supplier, output=outputs[index])
+        output_content += output_link_with_download_button(supplier=supplier, run=outputs[index])
     config_content = ""
     config = base.read_config(foodcoop=foodcoop, supplier=supplier)
     for detail in config:
@@ -144,7 +198,27 @@ def supplier_page(supplier):
             config_content += str(len(config[detail])) + " manual changes"
         else:
             config_content += str(config[detail])
+    script = __import__(get_script_name(supplier=supplier))
+    environment_variables = script.environment_variables()
+    for variable in environment_variables:
+        if config_content:
+            config_content += "<br/>"
+        if variable.name in os.environ:
+            if variable.required:
+                config_content += "✅ " + variable.name
+            else:
+                config_content += "✓ " + variable.name
+        elif variable.required:
+            config_content += "❌ " + variable.name
     return bottle.template('templates/supplier.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), supplier=supplier, output_content=output_content, config_content=config_content)
+
+def display_run_page(supplier, run):
+    content = ""
+    path = run_path(supplier, run)
+    downloads = all_download_buttons(supplier, run)
+    content += display_content(path=path, display_type="display")
+    content += display_content(path=path, display_type="details")
+    return bottle.template('templates/display_run.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), supplier=supplier, run=run, downloads=downloads, content=content)
 
 def edit_supplier_page(supplier):
     config_content = ""
@@ -167,34 +241,58 @@ def edit_supplier_page(supplier):
             placeholder = ""
             required = ""
             value = ""
-            if detail in config_variables:
-                if "required" in config_variables[detail]:
-                    if config_variables[detail]["required"]:
-                        required = "required"
-                if "example" in config_variables[detail]:
-                    if config_variables[detail]["example"]:
-                        placeholder = "placeholder='" + str(config_variables[detail]["example"]) + "'"
-            if config[detail]:
-                value = "value='" + str(config[detail]) + "'"
+            config_variables_of_this_name = [variable for variable in config_variables if variable.name == detail]
+            if config_variables_of_this_name:
+                variable = config_variables_of_this_name[0]
+                if variable.required:
+                    required = "required"
+                if variable.example:
+                    placeholder = "placeholder='" + str(variable.example) + "'"
+            value = "value='" + str(config[detail]) + "'"
             config_content += "<input name='{}' type='{}' {} {} {}>".format(detail, input_type, value, placeholder, required)
 
-    for variable, details in config_variables.items():
-        if variable in config:
+    for variable in config_variables:
+        if variable.name in config:
             continue
         if config_content:
             config_content += "<br/>"
-        config_content += str(variable) + ": "
+        config_content += str(variable.name) + ": "
         input_type = "text"
         placeholder = ""
         required = ""
-        if "example" in details:
-            if isinstance(details["example"], numbers.Number):
+        description = ""
+        if variable.example:
+            if isinstance(variable.example, numbers.Number):
                 input_type = "number"
-            placeholder = "placeholder='" + str(details["example"]) + "'"
-        if "required" in details:
-            if details["required"]:
-                required = "required"
-        config_content += "<input name='{}' type='{}' {} {}>".format(variable, input_type, placeholder, required)
+            placeholder = "placeholder='" + str(variable.example) + "'"
+        if variable.required:
+            required = "required"
+        if variable.description:
+            description = " ({})".format(variable.description)
+        config_content += "<input name='{}' type='{}' {} {}>{}".format(variable.name, input_type, placeholder, required, description)
+
+    environment_variables = script.environment_variables()
+    if environment_variables:
+        config_content += "<h2>Umgebungsvariablen</h2><p>Diese können nur manuell gesetzt werden.</p>"
+    for variable in environment_variables:
+        required = False
+        if variable.required:
+            required = True
+        if variable.name in os.environ:
+            if required:
+                mark = "✅"
+            else:
+                mark = "✓"
+        elif required:
+            mark = "❌"
+        else:
+            mark = "✗"
+        config_content += mark + " " + variable.name
+        if required:
+            config_content += " (benötigt)"
+        if variable.example:
+            config_content += " (Beispiel: " + variable.example + ")"
+        config_content += "<br/>"
 
     foodsoft_supplier_id = ""
     if "Foodsoft supplier ID" in config:
@@ -215,8 +313,6 @@ def login(fc):
 @bottle.route('/<fc>', method='POST')
 def do_main(fc):
     submitted_form = bottle.request.forms
-    for thing in submitted_form:
-        print(thing)
     global logged_in
     if 'password' in submitted_form:
         password = submitted_form.get('password')
@@ -241,6 +337,14 @@ def supplier(fc, supplier):
     global logged_in
     if logged_in:
         return supplier_page(supplier)
+    else:
+        return login_page(fc)
+
+@bottle.route('/<fc>/<supplier>/display/<run>')
+def display_run(fc, supplier, run):
+    global logged_in
+    if logged_in:
+        return display_run_page(supplier, run)
     else:
         return login_page(fc)
 
@@ -273,12 +377,11 @@ def edit_supplier(fc, supplier):
     else:
         return login_page(fc)
 
-@bottle.route('/<fc>/<supplier>/download/<filename:path>')
-def download(fc, supplier, filename):
-    print(filename)
+@bottle.route('/download/<filename:path>')
+def download(filename):
     global logged_in
     if logged_in:
-        return bottle.static_file(filename, root="output/" + foodcoop + "/" + supplier, download=filename)
+        return bottle.static_file(filename, root="", download=filename)
     else:
         return login_page(fc)
 

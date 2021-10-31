@@ -271,18 +271,27 @@ def run(foodcoop, supplier):
     articles = base.remove_articles_to_ignore(articles)
     articles = base.rename_duplicates(articles)
     articles, notifications = base.compare_manual_changes(foodcoop=foodcoop, supplier=supplier, supplier_id=supplier_id, articles=articles, notifications=notifications)
-    notifications = base.write_csv(foodcoop=foodcoop, supplier=supplier, articles=articles, notifications=notifications)
-    return base.compose_message(supplier=supplier, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications)
+    path, date = base.prepare_output(foodcoop=foodcoop, supplier=supplier)
+    notifications = base.write_articles_csv(file_path=base.file_path(path=path, folder="download", file_name=supplier + "_Artikel_" + date), articles=articles, notifications=notifications)
+    message_prefix = base.read_in_config(config, "message prefix", "")
+    message = base.compose_articles_csv_message(supplier=supplier, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications, prefix=message_prefix)
+    base.write_txt(file_path=base.file_path(path=path, folder="display", file_name="Zusammenfassung"), content=message)
 
-def config_variables(): # List of the special config variables this script uses and for each of them: whether they are required, example
-    return {"categories to ignore": {"required": False, "example": [2, 3, 9]},
-            "subcategories to ignore": {"required": False, "example": [3, 51]},
-            "articles to ignore": {"required": False, "example": [24245, 23953]}}
+def config_variables(): # List of the special config variables this script uses, whether they are required and how they could look like
+    cat_ignore = base.Variable(name="categories to ignore", required=False, example=[2, 3, 9])
+    subcat_ignore = base.Variable(name="subcategories to ignore", required=False, example=[3, 51])
+    art_ignore = base.Variable(name="articles to ignore", required=False, example=[24245, 23953])
+    message_prefix = base.Variable(name="message prefix", required=False, example="Hallo")
+    return [cat_ignore, subcat_ignore, art_ignore, message_prefix]
 
-def info(): # Info whether the script requests (takes) a file and whether it returns (generates) a file
-    requests_file = False
-    returns_file = True
-    return requests_file, returns_file
+def environment_variables(): # List of the special environment variables this script uses, whether they are required and how they could look like
+    foodsoft_url = base.Variable(name="LS_FOODSOFT_URL", required=False, example="https://app.foodcoops.at/coop_xy/")
+    foodsoft_user = base.Variable(name="LS_FOODSOFT_URL", required=False, example="name@foobar.com")
+    foodsoft_pass = base.Variable(name="LS_FOODSOFT_PASS", required=False, example="asdf1234")
+    return [foodsoft_url, foodsoft_user, foodsoft_pass]
+
+def inputs(): # List of the inputs this script takes, whether they are required, what type of input, how it could look like etc.
+    return []
 
 if __name__ == "__main__":
     message = run(foodcoop="krautkoopf", supplier="Biohof Pranger")

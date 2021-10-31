@@ -1,5 +1,6 @@
 import csv
 import os
+import logging
 import json
 import datetime
 import re
@@ -28,6 +29,21 @@ class Category:
         self.number = number
         self.name = name
         self.subcategories = subcategories
+
+class Variable:
+    def __init__(self, name, required=False, example=None, description=""):
+        self.name = name
+        self.required = required
+        self.example = example
+        self.description = description
+
+class Input:
+    def __init__(self, name, required=False, accepted_file_types=[], example=None, description=""):
+        self.name = name
+        self.required = required
+        self.accepted_file_types = accepted_file_types # for example ["csv"], or [] if not a file
+        self.example = example # important (if not a file) to know which type of input should be asked for
+        self.description = description
 
 def remove_double_strings_loop(text, string, description=None, number_of_runs=100):
     loop_count = 0
@@ -81,7 +97,7 @@ def read_foodsoft_config():
         foodsoft_url = os.environ['LS_FOODSOFT_URL']
         foodcoop_list = re.split(".*/(.*)/", foodsoft_url)
         if len(foodcoop_list) < 2:
-            print("Could not extract foodcoop name from url " + foodsoft_url)
+            logging.error("Could not extract foodcoop name from url " + foodsoft_url)
         else:
             foodcoop = foodcoop_list[1]
     foodsoft_user = None
@@ -91,12 +107,29 @@ def read_foodsoft_config():
         foodsoft_password = os.environ['LS_FOODSOFT_PASS']
     return foodcoop, foodsoft_url, foodsoft_user, foodsoft_password
 
+def output_path(foodcoop, supplier):
+    return os.path.join("output", foodcoop, supplier)
+
 def get_outputs(foodcoop, supplier):
-    path = "output/" + foodcoop + "/" + supplier
+    path = output_path(foodcoop, supplier)
     if os.path.exists(path):
-        return [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+        return [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
     else:
         return []
+
+def get_CSVs(foodcoop, supplier):
+    outputs = get_outputs(foodcoop, supplier)
+    path = output_path(foodcoop, supplier)
+    csv_files = []
+    for output in outputs:
+        csv_path = os.path.join(path, output, "download")
+        if os.path.exists(csv_path):
+            CSVs = [f for f in os.listdir(csv_path) if f.endswith(".csv")]
+            if len(CSVs) > 1:
+                print("Warning: Multiple CSVs found for " + output)
+            if CSVs:
+                csv_files.append(CSVs[0])
+    return csv_files
 
 def remove_articles_to_ignore(articles):
     return [x for x in articles if not x.ignore]
@@ -216,14 +249,16 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notificati
         articles_from_foodsoft = []
 
     # Find the last CSV created by the script
-    files = get_outputs(foodcoop=foodcoop, supplier=supplier)
+    files = get_CSVs(foodcoop=foodcoop, supplier=supplier)
     if not files:
         notifications.append("No previous CSV found for comparison.")
-    last_csv = files[-1] # TODO: It should be saved in a Config file which CSV was last imported, and then be chosen here
-    notifications.append("It was assumed '" + last_csv + "' was the last CSV imported into Foodsoft.")
-    with open("output/" + foodcoop + "/" + supplier + "/" + last_csv, newline='', encoding='utf-8') as csvfile:
-        last_csv_opened = csv.reader(csvfile, delimiter=';')
-        articles_from_last_run = read_articles_from_csv(last_csv_opened)
+        articles_from_last_run = []
+    else:
+        last_csv = files[-1] # TODO: It should be saved in a Config file which CSV was last imported, and then be chosen here
+        notifications.append("It was assumed '" + last_csv + "' was the last CSV imported into Foodsoft.")
+        with open("output/" + foodcoop + "/" + supplier + "/" + last_csv, newline='', encoding='utf-8') as csvfile:
+            last_csv_opened = csv.reader(csvfile, delimiter=';')
+            articles_from_last_run = read_articles_from_csv(last_csv_opened)
 
     # Compare for each article the newly readout data, the data from Foodsoft, and the data from the last run
     for article in articles:
@@ -310,7 +345,7 @@ def get_data_from_articles(articles, notifications):
 
     return rows, notifications
 
-def listCategories(categories):
+def list_categories(categories):
     txt = ""
     for category in categories:
         txt += "#" + str(category.number) + " " + category.name
@@ -324,20 +359,26 @@ def listCategories(categories):
         txt += "\n"
     return txt
 
-def compose_message(supplier, supplier_id, categories, ignored_categories, ignored_subcategories, ignored_articles, notifications):
+def compose_articles_csv_message(supplier, supplier_id=None, categories=[], ignored_categories=[], ignored_subcategories=[], ignored_articles=[], notifications=[], prefix=""):
     foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = read_foodsoft_config()
-    text = "Anbei die Liste an automatisch ausgelesenen Artikeln von " + supplier + ".\n"
-    if foodsoft_url:
+    text = ""
+    if prefix:
+        text += prefix + "\n\n"
+    text += "Die CSV mit automatisch ausgelesenen Artikeln von " + supplier + " wurde erstellt.\n"
+    if foodsoft_url and supplier_id:
         text += "Sie kann unter folgendem Link hochgeladen werden: (Häkchen bei 'Artikel löschen, die nicht in der hochgeladenen Datei sind' setzen!)\n"
         text += foodsoft_url + "suppliers/" + str(supplier_id) + "/articles/upload\n"
-    text += "\n\nAusgelesene Kategorien:\n"
-    text += listCategories(categories)
+    else:
+        text += "Sie kann in der Foodsoft hochgeladen werden unter Lieferant -> Artikel -> Artikel hochladen (Häkchen bei 'Artikel löschen, die nicht in der hochgeladenen Datei sind' setzen!)\n"
+    if categories:
+        text += "\nAusgelesene Kategorien:\n"
+        text += list_categories(categories)
     if ignored_categories:
         text += "\nIgnorierte Kategorien:\n"
-        text += listCategories(ignored_categories)
+        text += list_categories(ignored_categories)
     if ignored_subcategories:
         text += "\nIgnorierte Unterkategorien:\n"
-        text += listCategories(ignored_subcategories)
+        text += list_categories(ignored_subcategories)
     if ignored_articles:
         text += "\nIgnorierte einzelne Artikel:"
         for article in ignored_articles:
@@ -353,23 +394,38 @@ def compose_message(supplier, supplier_id, categories, ignored_categories, ignor
             text += "\n- " + notification
     return text
 
-def write_csv(foodcoop, supplier, articles, notifications=[]):
+def prepare_output(foodcoop, supplier):
+    path = "output"
+    os.makedirs(path, exist_ok=True)
+    path = os.path.join(path, foodcoop)
+    os.makedirs(path, exist_ok=True)
+    path = os.path.join(path, supplier)
+    os.makedirs(path, exist_ok=True)
+    date = datetime.date.today().isoformat()
+    path = os.path.join(path, date)
+    number = 1
+    while os.path.isdir(path + "_" + str(number)):
+        number += 1
+    path += "_" + str(number)
+    date += "_" + str(number)
+
+    return path, date
+
+def file_path(path, folder, file_name):
+    path = os.path.join(path, folder)
+    os.makedirs(path, exist_ok=True)
+    return os.path.join(path, file_name)
+
+def write_articles_csv(file_path, articles, notifications=[]):
     rows, notifications = get_data_from_articles(articles=articles, notifications=notifications)
 
-    if not os.path.exists("output"):
-        os.makedirs("output")
-    if not os.path.exists("output/" + foodcoop):
-        os.makedirs("output/" + foodcoop)
-    if not os.path.exists("output/" + foodcoop + "/" + supplier):
-        os.makedirs("output/" + foodcoop + "/" + supplier)
-    file_name = supplier + datetime.date.today().isoformat()
-    number = 1
-    while os.path.isfile('output/' + foodcoop + '/' + supplier + '/' + file_name + '_' + str(number) + '.csv'):
-        number += 1
-
-    with open('output/' + foodcoop + '/' + supplier + '/' + file_name + '_' + str(number) + '.csv', 'w', encoding='UTF8', newline='') as f:
+    with open(file_path + '.csv', 'w', encoding='UTF8', newline='') as f:
         writer = csv.writer(f, delimiter=';')
         writer.writerow(['avail.', 'Order number', 'Name', 'Note', 'Manufacturer', 'Origin', 'Unit', 'Price (net)', 'VAT', 'Deposit', 'Unit quantity', '', '', 'Category'])
         writer.writerows(rows)
 
     return notifications
+
+def write_txt(file_path, content):
+    with open(file_path + ".txt", "w", encoding="UTF8") as f:
+        f.write(content)

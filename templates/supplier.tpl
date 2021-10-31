@@ -11,7 +11,7 @@
             <p>{{messages}}</p>
             <h1>{{supplier}}</h1>
             <form action="/{{fc}}/{{supplier}}/run"><input type='submit' value='Skript ausführen'></form>
-            <h2>Zuletzt erstellte CSVs</h2>
+            <h2>Letzte Ausführungen</h2>
             <p>{{!output_content}}</p>
             <h2>Konfiguration</h2>
             <p><form action="/{{fc}}/{{supplier}}/edit"><input type='submit' value='Bearbeiten'></form>

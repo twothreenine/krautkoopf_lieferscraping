@@ -6,18 +6,28 @@ def run(foodcoop, supplier):
     test = base.Article(available=False, order_number=1, name="Test article", note=overlong_note, unit="1 kg", price_net=5.40, category="Test")
     articles.append(test)
 
-    base.write_csv(foodcoop=foodcoop, supplier=supplier, articles=articles)
-    return "Test import completed!"
+    path, date = base.prepare_output(foodcoop=foodcoop, supplier=supplier)
+    notifications = base.write_articles_csv(file_path=base.file_path(path=path, folder="download", file_name=supplier + "_articles_" + date), articles=articles)
+    test = base.write_articles_csv(file_path=base.file_path(path=path, folder="download", file_name=supplier + "_test_" + date), articles=articles)
+    base.write_txt(file_path=base.file_path(path=path, folder="display", file_name="Summary"), content=base.compose_articles_csv_message(supplier=supplier, notifications=notifications))
+    base.write_txt(file_path=base.file_path(path=path, folder="details", file_name="Log"), content="")
 
-def config_variables(): # Lists the special config variables this script uses and for each of them: whether they are required, example
-    return {"Test": {"required": False, "example": 43},
-            "Test2": {"required": True, "example": [34, 92]}}
+def config_variables(): # List of the special config variables this script uses, whether they are required and how they could look like
+    test1 = base.Variable(name="Test-Variable", required=False, example=43)
+    test2 = base.Variable(name="Test-Variable 2", required=True, example=[34, 92], description="Not actually used, only for testing")
+    return [test1, test2]
 
-def info(): # Info whether the script requests (takes) a file and whether it returns (generates) a file
-    requests_file = False
-    returns_file = True
-    return requests_file, returns_file
+def environment_variables(): # List of the special environment variables this script uses, whether they are required and how they could look like
+    foodsoft_url = base.Variable(name="LS_FOODSOFT_URL", required=False, example="https://app.foodcoops.at/coop_xy/")
+    foodsoft_user = base.Variable(name="LS_FOODSOFT_USER", required=True, example="name@foobar.com")
+    foodsoft_pass = base.Variable(name="LS_FOODSOFT_PASS", required=False, example="asdf1234")
+    foodsoft_test = base.Variable(name="LS_FOODSOFT_TEST", required=True, example="bla blub")
+    return [foodsoft_url, foodsoft_user, foodsoft_pass, foodsoft_test]
+
+def inputs(): # List of the inputs this script takes, whether they are required, what type of input, how it could look like etc.
+    text_input = base.Input(name="Test input", required=False, example="bla bla")
+    file_input = base.Input(name="Test file input", required=False, accepted_file_types=["txt"])
+    return [text_input, file_input]
 
 if __name__ == "__main__":
-    message = run(foodcoop="Test coop", supplier="Test supplier")
-    print(message)
+    run(foodcoop="Test coop", supplier="Test supplier")
