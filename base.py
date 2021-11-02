@@ -58,19 +58,19 @@ def remove_double_strings_loop(text, string, description=None, number_of_runs=10
             break
     return text
 
-def read_config(foodcoop, supplier="", ensure_subconfig=""):
+def read_config(foodcoop, configuration="", ensure_subconfig=""):
     filename = "config_" + foodcoop + ".json"
     with open(filename) as json_file:
         config = json.load(json_file)
-    if supplier:
-        if supplier not in config:
-            supplier_config = {}
+    if configuration:
+        if configuration not in config:
+            configuration_config = {}
         else:
-            supplier_config = config[supplier]
+            configuration_config = config[configuration]
         if ensure_subconfig:
-            if ensure_subconfig not in supplier_config:
-                supplier_config[subconfig] = {}
-        return supplier_config
+            if ensure_subconfig not in configuration_config:
+                configuration_config[ensure_subconfig] = {}
+        return configuration_config
     else:
         return config
 
@@ -80,13 +80,13 @@ def read_in_config(config, detail, alternative=None):
     else:
         return alternative
 
-def save_supplier_config(foodcoop, supplier, supplier_config):
+def save_configuration(foodcoop, configuration, configuration_config):
     filename = "config_" + foodcoop + ".json"
     with open(filename) as json_file:
         config = json.load(json_file)
-    if supplier not in config:
-        config[supplier] = {}
-    config[supplier] = supplier_config
+    if configuration not in config:
+        config[configuration] = {}
+    config[configuration] = configuration_config
     with open(filename, "w") as json_file:
         json.dump(config, json_file, indent=4)
 
@@ -107,19 +107,19 @@ def read_foodsoft_config():
         foodsoft_password = os.environ['LS_FOODSOFT_PASS']
     return foodcoop, foodsoft_url, foodsoft_user, foodsoft_password
 
-def output_path(foodcoop, supplier):
-    return os.path.join("output", foodcoop, supplier)
+def output_path(foodcoop, configuration):
+    return os.path.join("output", foodcoop, configuration)
 
-def get_outputs(foodcoop, supplier):
-    path = output_path(foodcoop, supplier)
+def get_outputs(foodcoop, configuration):
+    path = output_path(foodcoop, configuration)
     if os.path.exists(path):
         return [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
     else:
         return []
 
-def get_CSVs(foodcoop, supplier):
-    outputs = get_outputs(foodcoop, supplier)
-    path = output_path(foodcoop, supplier)
+def get_CSVs(foodcoop, configuration):
+    outputs = get_outputs(foodcoop, configuration)
+    path = output_path(foodcoop, configuration)
     csv_files = []
     for output in outputs:
         csv_path = os.path.join(path, output, "download")
@@ -206,7 +206,7 @@ def read_articles_from_csv(csv):
             articles.append(article)
     return articles
 
-def compare_string(article, article_from_last_run, article_from_foodsoft, string_type, supplier_config, notifications):
+def compare_string(article, article_from_last_run, article_from_foodsoft, string_type, configuration_config, notifications):
     if string_type not in ["name", "note", "manufacturer", "origin", "unit", "price_net", "vat", "deposit", "unit_quantity"]:
         notifications.append("Invalid string type for article attribute (look in config file?): " + string_type)
     else:
@@ -216,28 +216,28 @@ def compare_string(article, article_from_last_run, article_from_foodsoft, string
                 replace = True
                 replaced_string = getattr(article, string_type)
                 manual_string = getattr(article_from_foodsoft, string_type)
-                if article.order_number not in supplier_config["manual changes"]:
-                    supplier_config["manual changes"][article.order_number] = {}
-                supplier_config["manual changes"][article.order_number][string_type] = {}
-                supplier_config["manual changes"][article.order_number][string_type]["replaced"] = replaced_string
-                supplier_config["manual changes"][article.order_number][string_type]["manual"] = manual_string
+                if article.order_number not in configuration_config["manual changes"]:
+                    configuration_config["manual changes"][article.order_number] = {}
+                configuration_config["manual changes"][article.order_number][string_type] = {}
+                configuration_config["manual changes"][article.order_number][string_type]["replaced"] = replaced_string
+                configuration_config["manual changes"][article.order_number][string_type]["manual"] = manual_string
                 notifications.append("Keeping manual change of article " + string_type + ": " + replaced_string + " -> " + manual_string)
-        if not replace and article.order_number in supplier_config["manual changes"]:
-            manual_changes = supplier_config["manual changes"][article.order_number]
+        if not replace and article.order_number in configuration_config["manual changes"]:
+            manual_changes = configuration_config["manual changes"][article.order_number]
             if string_type in manual_changes:
                 if manual_changes[string_type]["replaced"] == getattr(article, string_type):
                     replace = True
                     manual_string = manual_changes[string_type]["manual"]
         if replace:
             setattr(article, string_type, manual_string)
-    return article, supplier_config
+    return article, configuration_config
 
 def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notifications=[], compare_name=True, compare_note=True, compare_manufacturer=True, compare_origin=True, compare_unit=True, compare_price=True, compare_vat=False, compare_deposit=False, compare_unit_quantity=False, compare_category=True):
     # This is an optional method which checks if article data has been modified manually in Foodsoft after the last CSV was created.
     # In case the article data in the source did not change since the last run of the script and the article data from your Foodsoft instance differs, latter is adopted.
 
     # Extract the configuration for this supplier
-    supplier_config = read_config(foodcoop=foodcoop, supplier=supplier, ensure_subconfig="manual changes")
+    configuration_config = read_config(foodcoop=foodcoop, configuration=supplier, ensure_subconfig="manual changes")
     foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = read_foodsoft_config()
 
     # Connect to your Foodsoft instance and download the articles CSV of the supplier
@@ -249,7 +249,7 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notificati
         articles_from_foodsoft = []
 
     # Find the last CSV created by the script
-    files = get_CSVs(foodcoop=foodcoop, supplier=supplier)
+    files = get_CSVs(foodcoop=foodcoop, configuration=supplier)
     if not files:
         notifications.append("No previous CSV found for comparison.")
         articles_from_last_run = []
@@ -274,36 +274,36 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notificati
             article_from_last_run = None
 
         if compare_name:
-            article, supplier_config = compare_string(article, article_from_last_run, article_from_foodsoft, "name", supplier_config, notifications)
+            article, configuration_config = compare_string(article, article_from_last_run, article_from_foodsoft, "name", configuration_config, notifications)
         if compare_note:
-            article, supplier_config = compare_string(article, article_from_last_run, article_from_foodsoft, "note", supplier_config, notifications)
+            article, configuration_config = compare_string(article, article_from_last_run, article_from_foodsoft, "note", configuration_config, notifications)
         if compare_manufacturer:
-            article, supplier_config = compare_string(article, article_from_last_run, article_from_foodsoft, "manufacturer", supplier_config, notifications)
+            article, configuration_config = compare_string(article, article_from_last_run, article_from_foodsoft, "manufacturer", configuration_config, notifications)
         if compare_origin:
-            article, supplier_config = compare_string(article, article_from_last_run, article_from_foodsoft, "origin", supplier_config, notifications)
+            article, configuration_config = compare_string(article, article_from_last_run, article_from_foodsoft, "origin", configuration_config, notifications)
         if compare_unit:
-            article, supplier_config = compare_string(article, article_from_last_run, article_from_foodsoft, "unit", supplier_config, notifications)
+            article, configuration_config = compare_string(article, article_from_last_run, article_from_foodsoft, "unit", configuration_config, notifications)
         if compare_price:
-            article, supplier_config = compare_string(article, article_from_last_run, article_from_foodsoft, "price_net", supplier_config, notifications)
+            article, configuration_config = compare_string(article, article_from_last_run, article_from_foodsoft, "price_net", configuration_config, notifications)
         if compare_vat:
-            article, supplier_config = compare_string(article, article_from_last_run, article_from_foodsoft, "vat", supplier_config, notifications)
+            article, configuration_config = compare_string(article, article_from_last_run, article_from_foodsoft, "vat", configuration_config, notifications)
         if compare_deposit:
-            article, supplier_config = compare_string(article, article_from_last_run, article_from_foodsoft, "deposit", supplier_config, notifications)
+            article, configuration_config = compare_string(article, article_from_last_run, article_from_foodsoft, "deposit", configuration_config, notifications)
         if compare_unit_quantity:
-            article, supplier_config = compare_string(article, article_from_last_run, article_from_foodsoft, "unit_quantity", supplier_config, notifications)
+            article, configuration_config = compare_string(article, article_from_last_run, article_from_foodsoft, "unit_quantity", configuration_config, notifications)
         if compare_category:
             manual_category = False
-            if article.order_number in supplier_config["manual changes"]:
-                if "category" in supplier_config["manual changes"][article.order_number]:
-                    article.category = supplier_config["manual changes"][article.order_number]["category"]
+            if article.order_number in configuration_config["manual changes"]:
+                if "category" in configuration_config["manual changes"][article.order_number]:
+                    article.category = configuration_config["manual changes"][article.order_number]["category"]
                     manual_category = True
             if not manual_category and article_from_foodsoft:
-                if not article.order_number in supplier_config["manual changes"]:
-                    supplier_config["manual changes"][article.order_number] = {}
-                supplier_config["manual changes"][article.order_number]["category"] = article_from_foodsoft.category
+                if not article.order_number in configuration_config["manual changes"]:
+                    configuration_config["manual changes"][article.order_number] = {}
+                configuration_config["manual changes"][article.order_number]["category"] = article_from_foodsoft.category
                 article.category = article_from_foodsoft.category
 
-    save_supplier_config(foodcoop=foodcoop, supplier=supplier, supplier_config=supplier_config)
+    save_configuration(foodcoop=foodcoop, configuration=supplier, configuration_config=configuration_config)
 
     return articles, notifications
 
@@ -394,12 +394,12 @@ def compose_articles_csv_message(supplier, supplier_id=None, categories=[], igno
             text += "\n- " + notification
     return text
 
-def prepare_output(foodcoop, supplier):
+def prepare_output(foodcoop, configuration):
     path = "output"
     os.makedirs(path, exist_ok=True)
     path = os.path.join(path, foodcoop)
     os.makedirs(path, exist_ok=True)
-    path = os.path.join(path, supplier)
+    path = os.path.join(path, configuration)
     os.makedirs(path, exist_ok=True)
     date = datetime.date.today().isoformat()
     path = os.path.join(path, date)

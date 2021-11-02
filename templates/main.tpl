@@ -10,9 +10,9 @@
             <p>{{messages}}</p>
             <h1>{{foodcoop}} Lieferscraping</h1>
             <h2>Skript-Konfigurationen</h2>
-            <p>{{!suppliers}}</p>
+            <p>{{!configurations}}</p>
             <form action="/{{fc}}" method="post">
-                <input name="new supplier" value="Neue Konfiguration anlegen" type="submit" />
+                <input name="new configuration" value="Neue Konfiguration anlegen" type="submit" />
             </form>
             <br/>
             <form action="/{{fc}}" method="post">

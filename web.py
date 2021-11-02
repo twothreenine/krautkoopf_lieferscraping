@@ -21,11 +21,11 @@ def read_messages():
     messages = []
     return content
 
-def supplier_link(supplier):
-    return bottle.template("<a href='/{{foodcoop}}/{{supplier}}'>{{supplier}}</a>", foodcoop=foodcoop, supplier=supplier)
+def configuration_link(configuration):
+    return bottle.template("<a href='/{{foodcoop}}/{{configuration}}'>{{configuration}}</a>", foodcoop=foodcoop, configuration=configuration)
 
-def display_output_link(supplier, run):
-    return bottle.template("<a href='/{{foodcoop}}/{{supplier}}/display/{{run}}'>{{run}}</a>", foodcoop=foodcoop, supplier=supplier, run=run)
+def display_output_link(configuration, run):
+    return bottle.template("<a href='/{{foodcoop}}/{{configuration}}/display/{{run}}'>{{run}}</a>", foodcoop=foodcoop, configuration=configuration, run=run)
 
 def available_scripts():
     script_files = [f for f in os.listdir() if f.startswith("script_") and f.endswith(".py")]
@@ -57,21 +57,21 @@ def script_options(selected_script=None):
         script_options += "<option value='{}' {}>{}</option>".format(value, selected, script[0].capitalize() + ": " + script[1])
     return script_options
 
-def get_script_name(supplier):
-    config = base.read_config(foodcoop=foodcoop, supplier=supplier, ensure_subconfig="Script name")
+def get_script_name(configuration):
+    config = base.read_config(foodcoop=foodcoop, configuration=configuration, ensure_subconfig="Script name")
     script = "script_" + config["Script name"]
     return script
 
-def run_path(supplier, run):
-    return os.path.join("output", foodcoop, supplier, run)
+def run_path(configuration, run):
+    return os.path.join("output", foodcoop, configuration, run)
 
 def list_files(path, folder="download"):
     return [f for f in os.listdir(os.path.join(path, folder))]
 
-def zip_download(supplier, run):
-    path = run_path(supplier, run)
+def zip_download(configuration, run):
+    path = run_path(configuration, run)
     files = list_files(path)
-    zip_filepath = os.path.join(path, supplier + "_" + run + ".zip")
+    zip_filepath = os.path.join(path, configuration + "_" + run + ".zip")
     if not os.path.isfile(zip_filepath):
         with ZipFile(zip_filepath, 'w') as zipObj:
             for file in files:
@@ -80,27 +80,27 @@ def zip_download(supplier, run):
     source = "/download/" + zip_filepath
     return source
 
-def output_link_with_download_button(supplier, run):
-    path = run_path(supplier, run)
+def output_link_with_download_button(configuration, run):
+    path = run_path(configuration, run)
     files = list_files(path)
-    output_link = display_output_link(supplier, run)
+    output_link = display_output_link(configuration, run)
     if files:
         if len(files) == 1:
-            source = "/download/output/" + foodcoop + "/" + supplier + "/" + run + "/download/" + files[0]
+            source = "/download/output/" + foodcoop + "/" + configuration + "/" + run + "/download/" + files[0]
         else:
-            source = zip_download(supplier, run)
+            source = zip_download(configuration, run)
         return bottle.template('templates/download_button.tpl', source=source, value="⤓", affix=" " + output_link)
     else:
         return output_link
 
-def all_download_buttons(supplier, run):
+def all_download_buttons(configuration, run):
     content = ""
-    path = run_path(supplier, run)
+    path = run_path(configuration, run)
     files = [f for f in os.listdir(os.path.join(path, "download"))]
     if len(files) > 1:
-        content += bottle.template('templates/download_button.tpl', source=zip_download(supplier, run), value="⤓ ZIP", affix="")
+        content += bottle.template('templates/download_button.tpl', source=zip_download(configuration, run), value="⤓ ZIP", affix="")
     for file in files:
-        source = "/download/output/" + foodcoop + "/" + supplier + "/" + run + "/download/" + file
+        source = "/download/output/" + foodcoop + "/" + configuration + "/" + run + "/download/" + file
         content += bottle.template('templates/download_button.tpl', source=source, value="⤓ " + file, affix="")
     return content
 
@@ -116,24 +116,24 @@ def display_content(path, display_type="display"):
             display_content += bottle.template('templates/{}_content.tpl'.format(display_type), title=title, content=content)
     return display_content
 
-def add_supplier(submitted_form):
+def add_configuration(submitted_form):
     new_config_name = submitted_form.get('new config name')
     config = base.read_config(foodcoop=foodcoop)
     if new_config_name in config:
         messages.append("Es existiert bereits eine Konfiguration namens " + new_config_name + " für " + foodcoop.capitalize() + ". Bitte wähle einen anderen Namen.")
-        return new_supplier_page()
+        return new_configuration_page()
     else:
-        base.save_supplier_config(foodcoop=foodcoop, supplier=new_config_name, supplier_config={"Script name": submitted_form.get('script name'), "Foodsoft supplier ID": submitted_form.get('foodsoft supplier ID')})
+        base.save_configuration(foodcoop=foodcoop, configuration=new_config_name, configuration_config={"Script name": submitted_form.get('script name'), "Foodsoft supplier ID": submitted_form.get('foodsoft supplier ID')})
         messages.append("Konfiguration angelegt.")
-        script = __import__(get_script_name(supplier=new_config_name))
+        script = __import__(get_script_name(configuration=new_config_name))
         config_variables = script.config_variables()
         if config_variables:
-            return edit_supplier_page(supplier=new_config_name)
+            return edit_configuration_page(configuration=new_config_name)
         else:
             return main_page()
 
-def save_supplier_edit(supplier, submitted_form):
-    config = base.read_config(foodcoop=foodcoop, supplier=supplier)
+def save_configuration_edit(configuration, submitted_form):
+    config = base.read_config(foodcoop=foodcoop, configuration=configuration)
     for name in submitted_form:
         value = submitted_form.get(name)
         if value:
@@ -152,23 +152,23 @@ def save_supplier_edit(supplier, submitted_form):
             config[name] = value
         elif name in config:
             config.pop(name)
-    base.save_supplier_config(foodcoop=foodcoop, supplier=supplier, supplier_config=config)
+    base.save_configuration(foodcoop=foodcoop, configuration=configuration, configuration_config=config)
 
 def main_page():
     content = ""
     config = base.read_config(foodcoop=foodcoop)
-    suppliers = [x for x in config]
-    if suppliers:
-        content += supplier_link(suppliers[0])
-        if "note" in suppliers[0]:
-            content += " (" + suppliers[0]["note"] + ")"
-    if len(suppliers) > 1:
-        for supplier in suppliers[1:]:
-            content += "<br/>" + supplier_link(supplier)
-            if "note" in supplier:
-                content += " (" + supplier["note"] + ")"
+    configurations = [x for x in config]
+    if configurations:
+        content += configuration_link(configurations[0])
+        if "note" in configurations[0]:
+            content += " (" + configurations[0]["note"] + ")"
+    if len(configurations) > 1:
+        for configuration in configurations[1:]:
+            content += "<br/>" + configuration_link(configuration)
+            if "note" in configuration:
+                content += " (" + configuration["note"] + ")"
 
-    return bottle.template('templates/main.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), suppliers=content)
+    return bottle.template('templates/main.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configurations=content)
 
 def login_page(fc):
     if fc == foodcoop:
@@ -176,9 +176,9 @@ def login_page(fc):
     else:
         return bottle.template('templates/false_url.tpl', foodcoop=fc)
 
-def supplier_page(supplier):
+def configuration_page(configuration):
     output_content = ""
-    outputs = base.get_outputs(foodcoop=foodcoop, supplier=supplier)
+    outputs = base.get_outputs(foodcoop=foodcoop, configuration=configuration)
     if not outputs:
         output_content += "Keine Ausführungen gefunden."
     outputs.reverse()
@@ -187,9 +187,9 @@ def supplier_page(supplier):
             break
         if output_content:
             output_content += "<br/>"
-        output_content += output_link_with_download_button(supplier=supplier, run=outputs[index])
+        output_content += output_link_with_download_button(configuration=configuration, run=outputs[index])
     config_content = ""
-    config = base.read_config(foodcoop=foodcoop, supplier=supplier)
+    config = base.read_config(foodcoop=foodcoop, configuration=configuration)
     for detail in config:
         if config_content:
             config_content += "<br/>"
@@ -198,7 +198,7 @@ def supplier_page(supplier):
             config_content += str(len(config[detail])) + " manual changes"
         else:
             config_content += str(config[detail])
-    script = __import__(get_script_name(supplier=supplier))
+    script = __import__(get_script_name(configuration=configuration))
     environment_variables = script.environment_variables()
     for variable in environment_variables:
         if config_content:
@@ -210,20 +210,20 @@ def supplier_page(supplier):
                 config_content += "✓ " + variable.name
         elif variable.required:
             config_content += "❌ " + variable.name
-    return bottle.template('templates/supplier.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), supplier=supplier, output_content=output_content, config_content=config_content)
+    return bottle.template('templates/configuration.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, output_content=output_content, config_content=config_content)
 
-def display_run_page(supplier, run):
+def display_run_page(configuration, run):
     content = ""
-    path = run_path(supplier, run)
-    downloads = all_download_buttons(supplier, run)
+    path = run_path(configuration, run)
+    downloads = all_download_buttons(configuration, run)
     content += display_content(path=path, display_type="display")
     content += display_content(path=path, display_type="details")
-    return bottle.template('templates/display_run.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), supplier=supplier, run=run, downloads=downloads, content=content)
+    return bottle.template('templates/display_run.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, run=run, downloads=downloads, content=content)
 
-def edit_supplier_page(supplier):
+def edit_configuration_page(configuration):
     config_content = ""
-    config = base.read_config(foodcoop=foodcoop, supplier=supplier)
-    script = __import__(get_script_name(supplier=supplier))
+    config = base.read_config(foodcoop=foodcoop, configuration=configuration)
+    script = __import__(get_script_name(configuration=configuration))
     config_variables = script.config_variables()
     for detail in config:
         if detail == "Script name" or detail == "Foodsoft supplier ID":
@@ -297,10 +297,10 @@ def edit_supplier_page(supplier):
     foodsoft_supplier_id = ""
     if "Foodsoft supplier ID" in config:
         foodsoft_supplier_id = config["Foodsoft supplier ID"]
-    return bottle.template('templates/edit_supplier.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), supplier=supplier, config_content=config_content, script_options=script_options(selected_script=config["Script name"]), fs_supplier_id=foodsoft_supplier_id)
+    return bottle.template('templates/edit_configuration.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, config_content=config_content, script_options=script_options(selected_script=config["Script name"]), fs_supplier_id=foodsoft_supplier_id)
 
-def new_supplier_page():
-    return bottle.template('templates/new_supplier.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), script_options=script_options())
+def new_configuration_page():
+    return bottle.template('templates/new_configuration.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), script_options=script_options())
 
 @bottle.route('/<fc>')
 def login(fc):
@@ -327,53 +327,53 @@ def do_main(fc):
         logged_in = False
         messages.append("Logout erfolgreich.")
         return login_page(fc)
-    elif logged_in and 'new supplier' in submitted_form:
-        return new_supplier_page()
+    elif logged_in and 'new configuration' in submitted_form:
+        return new_configuration_page()
     elif logged_in and 'new config name' in submitted_form:
-        return add_supplier(submitted_form)
+        return add_configuration(submitted_form)
 
-@bottle.route('/<fc>/<supplier>')
-def supplier(fc, supplier):
+@bottle.route('/<fc>/<configuration>')
+def configuration(fc, configuration):
     global logged_in
     if logged_in:
-        return supplier_page(supplier)
+        return configuration_page(configuration)
     else:
         return login_page(fc)
 
-@bottle.route('/<fc>/<supplier>/display/<run>')
-def display_run(fc, supplier, run):
+@bottle.route('/<fc>/<configuration>/display/<run>')
+def display_run(fc, configuration, run):
     global logged_in
     if logged_in:
-        return display_run_page(supplier, run)
+        return display_run_page(configuration, run)
     else:
         return login_page(fc)
 
-@bottle.route('/<fc>/<supplier>', method='POST')
-def save_supplier(fc, supplier):
+@bottle.route('/<fc>/<configuration>', method='POST')
+def save_configuration(fc, configuration):
     global logged_in
     if logged_in:
-        save_supplier_edit(supplier=supplier, submitted_form=bottle.request.forms)
+        save_configuration_edit(configuration=configuration, submitted_form=bottle.request.forms)
         messages.append("Änderungen in Konfiguration gespeichert.")
-        return supplier_page(supplier)
+        return configuration_page(configuration)
     else:
         return login_page(fc)
 
-@bottle.route('/<fc>/<supplier>/run')
-def run_script(fc, supplier):
+@bottle.route('/<fc>/<configuration>/run')
+def run_script(fc, configuration):
     global logged_in
     if logged_in:
-        script = __import__(get_script_name(supplier=supplier))
-        script.run(foodcoop=foodcoop, supplier=supplier)
+        script = __import__(get_script_name(configuration=configuration))
+        script.run(foodcoop=foodcoop, configuration=configuration)
         messages.append("Skript erfolgreich ausgeführt.")
-        return supplier_page(supplier)
+        return configuration_page(configuration)
     else:
         return login_page(fc)
 
-@bottle.route('/<fc>/<supplier>/edit')
-def edit_supplier(fc, supplier):
+@bottle.route('/<fc>/<configuration>/edit')
+def edit_configuration(fc, configuration):
     global logged_in
     if logged_in:
-        return edit_supplier_page(supplier)
+        return edit_configuration_page(configuration)
     else:
         return login_page(fc)
 

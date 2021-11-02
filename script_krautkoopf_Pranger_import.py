@@ -247,8 +247,8 @@ def getArticles(category):
                 ignored_articles.append(article)
             articles.append(article)
 
-def run(foodcoop, supplier):
-    config = base.read_config(foodcoop, supplier)
+def run(foodcoop, configuration):
+    config = base.read_config(foodcoop, configuration)
     global supplier_id
     supplier_id = base.read_in_config(config, "Foodsoft supplier ID", None)
     global categories_to_ignore
@@ -270,11 +270,11 @@ def run(foodcoop, supplier):
     global notifications
     articles = base.remove_articles_to_ignore(articles)
     articles = base.rename_duplicates(articles)
-    articles, notifications = base.compare_manual_changes(foodcoop=foodcoop, supplier=supplier, supplier_id=supplier_id, articles=articles, notifications=notifications)
-    path, date = base.prepare_output(foodcoop=foodcoop, supplier=supplier)
-    notifications = base.write_articles_csv(file_path=base.file_path(path=path, folder="download", file_name=supplier + "_Artikel_" + date), articles=articles, notifications=notifications)
+    articles, notifications = base.compare_manual_changes(foodcoop=foodcoop, supplier=configuration, supplier_id=supplier_id, articles=articles, notifications=notifications)
+    path, date = base.prepare_output(foodcoop=foodcoop, configuration=configuration)
+    notifications = base.write_articles_csv(file_path=base.file_path(path=path, folder="download", file_name=configuration + "_Artikel_" + date), articles=articles, notifications=notifications)
     message_prefix = base.read_in_config(config, "message prefix", "")
-    message = base.compose_articles_csv_message(supplier=supplier, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications, prefix=message_prefix)
+    message = base.compose_articles_csv_message(supplier=configuration, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications, prefix=message_prefix)
     base.write_txt(file_path=base.file_path(path=path, folder="display", file_name="Zusammenfassung"), content=message)
 
 def config_variables(): # List of the special config variables this script uses, whether they are required and how they could look like
@@ -294,5 +294,5 @@ def inputs(): # List of the inputs this script takes, whether they are required,
     return []
 
 if __name__ == "__main__":
-    message = run(foodcoop="krautkoopf", supplier="Biohof Pranger")
+    message = run(foodcoop="krautkoopf", configuration="Biohof Pranger")
     print(message)

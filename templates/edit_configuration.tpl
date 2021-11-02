@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>{{foodcoop}} Lieferscraping - {{supplier}}</title>
+        <title>{{foodcoop}} Lieferscraping - {{configuration}}</title>
         <link rel="stylesheet" href="/templates/styles.css" type="text/css">
     </head>
 
@@ -9,8 +9,8 @@
         <div>
             <form action="/{{fc}}"><input type='submit' value='Zurück zum Hauptmenü'></form>
             <p>{{messages}}</p>
-            <h1>{{supplier}} Konfiguration</h1>
-            <form action="/{{fc}}/{{supplier}}" method="post">
+            <h1>{{configuration}} Konfiguration</h1>
+            <form action="/{{fc}}/{{configuration}}" method="post">
                 Skript: 
                 <select name="Script name" required>
                     {{!script_options}}
@@ -20,7 +20,7 @@
                 <br><br>
                 <input type="submit" value="Speichern">
             </form>
-            <form action="/{{fc}}/{{supplier}}"><input type='submit' value='Bearbeiten abbrechen'></form>
+            <form action="/{{fc}}/{{configuration}}"><input type='submit' value='Bearbeiten abbrechen'></form>
         </div>
     </body>
 </html>
