@@ -15,7 +15,6 @@
                 <p><select name="script name" required>
                     {{!script_options}}
                 </select></p>
-                <p><input name="foodsoft supplier ID" type="number" placeholder="Foodsoft supplier ID"></p>
                 <br><br>
                 <input type="submit" value="Konfiguration anlegen">
             </form>

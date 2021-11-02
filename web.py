@@ -5,6 +5,7 @@ import os
 import numbers
 import json
 from zipfile import ZipFile
+import re
 
 foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = base.read_foodsoft_config()
 logged_in = False
@@ -20,6 +21,15 @@ def read_messages():
             content += "<br/>" + message
     messages = []
     return content
+
+def convert_urls_to_links(text):
+    urls = re.findall("http\S*", text)
+    for url in urls:
+        if "'" in url or "</a>" in url:
+            continue
+        link = "<a href='{}' target='_blank'>{}</a>".format(url, url)
+        text = text.replace(url, link)
+    return text
 
 def configuration_link(configuration):
     return bottle.template("<a href='/{{foodcoop}}/{{configuration}}'>{{configuration}}</a>", foodcoop=foodcoop, configuration=configuration)
@@ -58,8 +68,8 @@ def script_options(selected_script=None):
     return script_options
 
 def get_script_name(configuration):
-    config = base.read_config(foodcoop=foodcoop, configuration=configuration, ensure_subconfig="Script name")
-    script = "script_" + config["Script name"]
+    config = base.read_config(foodcoop=foodcoop, configuration=configuration)
+    script = "script_" + base.read_in_config(config=config, detail="Script name")
     return script
 
 def run_path(configuration, run):
@@ -111,7 +121,9 @@ def display_content(path, display_type="display"):
         files = [f for f in os.listdir(file_path)]
         for file in files:
             with open(os.path.join(path, display_type, file), encoding="utf-8") as text_file:
-                content = text_file.read().replace("\n", "<br>")
+                content = text_file.read()
+                content = convert_urls_to_links(content)
+                content = content.replace("\n", "<br>")
             title = os.path.splitext(file)[0]
             display_content += bottle.template('templates/{}_content.tpl'.format(display_type), title=title, content=content)
     return display_content
@@ -123,7 +135,7 @@ def add_configuration(submitted_form):
         messages.append("Es existiert bereits eine Konfiguration namens " + new_config_name + " für " + foodcoop.capitalize() + ". Bitte wähle einen anderen Namen.")
         return new_configuration_page()
     else:
-        base.save_configuration(foodcoop=foodcoop, configuration=new_config_name, configuration_config={"Script name": submitted_form.get('script name'), "Foodsoft supplier ID": submitted_form.get('foodsoft supplier ID')})
+        base.save_configuration(foodcoop=foodcoop, configuration=new_config_name, configuration_config={"Script name": submitted_form.get('script name')})
         messages.append("Konfiguration angelegt.")
         script = __import__(get_script_name(configuration=new_config_name))
         config_variables = script.config_variables()
@@ -135,6 +147,8 @@ def add_configuration(submitted_form):
 def save_configuration_edit(configuration, submitted_form):
     config = base.read_config(foodcoop=foodcoop, configuration=configuration)
     for name in submitted_form:
+        if name == "configuration name":
+            continue
         value = submitted_form.get(name)
         if value:
             if value.startswith("[") and value.endswith("]"):
@@ -153,6 +167,23 @@ def save_configuration_edit(configuration, submitted_form):
         elif name in config:
             config.pop(name)
     base.save_configuration(foodcoop=foodcoop, configuration=configuration, configuration_config=config)
+    configuration_name = submitted_form.get('configuration name')
+    if configuration_name != configuration:
+        renamed_configuration = base.rename_configuration(foodcoop=foodcoop, old_configuration_name=configuration, new_configuration_name=configuration_name)
+        if renamed_configuration:
+            messages.append('Konfiguration "{}" erfolgreich in "{}" umbenannt.'.format(configuration, renamed_configuration))
+        return configuration_name
+    else:
+        return configuration
+
+def del_configuration(submitted_form):
+    configuration_to_delete = submitted_form.get('delete configuration')
+    deleted_configuration = base.delete_configuration(foodcoop, configuration_to_delete)
+    if deleted_configuration:
+        messages.append(configuration_to_delete + " erfolgreich gelöscht.")
+    else:
+        messages.append("Löschen von " + configuration_to_delete + " fehlgeschlagen: Konfiguration scheint nicht zu existieren.")
+    return main_page()
 
 def main_page():
     content = ""
@@ -226,7 +257,7 @@ def edit_configuration_page(configuration):
     script = __import__(get_script_name(configuration=configuration))
     config_variables = script.config_variables()
     for detail in config:
-        if detail == "Script name" or detail == "Foodsoft supplier ID":
+        if detail == "Script name":
             continue
         if config_content:
             config_content += "<br/>"
@@ -294,10 +325,10 @@ def edit_configuration_page(configuration):
             config_content += " (Beispiel: " + variable.example + ")"
         config_content += "<br/>"
 
-    foodsoft_supplier_id = ""
-    if "Foodsoft supplier ID" in config:
-        foodsoft_supplier_id = config["Foodsoft supplier ID"]
-    return bottle.template('templates/edit_configuration.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, config_content=config_content, script_options=script_options(selected_script=config["Script name"]), fs_supplier_id=foodsoft_supplier_id)
+    return bottle.template('templates/edit_configuration.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, config_content=config_content, script_options=script_options(selected_script=config["Script name"]))
+
+def delete_configuration_page(configuration):
+    return bottle.template('templates/delete_configuration.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration)
 
 def new_configuration_page():
     return bottle.template('templates/new_configuration.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), script_options=script_options())
@@ -331,6 +362,8 @@ def do_main(fc):
         return new_configuration_page()
     elif logged_in and 'new config name' in submitted_form:
         return add_configuration(submitted_form)
+    elif logged_in and 'delete configuration' in submitted_form:
+        return del_configuration(submitted_form)
 
 @bottle.route('/<fc>/<configuration>')
 def configuration(fc, configuration):
@@ -352,7 +385,7 @@ def display_run(fc, configuration, run):
 def save_configuration(fc, configuration):
     global logged_in
     if logged_in:
-        save_configuration_edit(configuration=configuration, submitted_form=bottle.request.forms)
+        configuration = save_configuration_edit(configuration=configuration, submitted_form=bottle.request.forms)
         messages.append("Änderungen in Konfiguration gespeichert.")
         return configuration_page(configuration)
     else:
@@ -374,6 +407,14 @@ def edit_configuration(fc, configuration):
     global logged_in
     if logged_in:
         return edit_configuration_page(configuration)
+    else:
+        return login_page(fc)
+
+@bottle.route('/<fc>/<configuration>/delete')
+def delete_configuration(fc, configuration):
+    global logged_in
+    if logged_in:
+        return delete_configuration_page(configuration)
     else:
         return login_page(fc)
 

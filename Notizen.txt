@@ -4,7 +4,6 @@
 aktuell:
 - In Config festhalten, welche CSVs (zuletzt) importiert wurden: last_imported_CSVs
 - Webinterface zum Ausführen von Skripten auf Anforderung; bestätigen, ob die CSV daraufhin auch hochgeladen wurde:
-	- "Supplier" umbenennen in "Configuration" (allgemeiner halten, auch für Skripte für andere Zwecke als Lieferscraping)
 	- Skript-ausführen-Seite (Fortschritt, Message, Download, Bestätigen ob hochgeladen -> Speichern in Config)
 (- Option Skript in bestimmtem Turnus automatisch ausführen zu lassen, z.B. jeden Donnerstag um 6:00 Uhr?)
 (- Ignore-Feature für Produzenten, Herkunft und Herkunft-startet-mit (z.B. PLZ 2...))

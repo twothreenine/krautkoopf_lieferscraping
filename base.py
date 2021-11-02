@@ -80,15 +80,47 @@ def read_in_config(config, detail, alternative=None):
     else:
         return alternative
 
-def save_configuration(foodcoop, configuration, configuration_config):
+def save_config(foodcoop, config):
     filename = "config_" + foodcoop + ".json"
-    with open(filename) as json_file:
-        config = json.load(json_file)
+    with open(filename, "w") as json_file:
+        json.dump(config, json_file, indent=4)
+
+def save_configuration(foodcoop, configuration, configuration_config):
+    config = read_config(foodcoop)
     if configuration not in config:
         config[configuration] = {}
     config[configuration] = configuration_config
-    with open(filename, "w") as json_file:
-        json.dump(config, json_file, indent=4)
+    save_config(foodcoop, config)
+
+def rename_configuration(foodcoop, old_configuration_name, new_configuration_name):
+    config = read_config(foodcoop)
+    if old_configuration_name in config:
+        config[new_configuration_name] = config.pop(old_configuration_name)
+        save_config(foodcoop, config)
+        existing_output_path = output_path(foodcoop, old_configuration_name)
+        new_output_path = output_path(foodcoop, new_configuration_name)
+        if os.path.exists(new_output_path):
+            for entry in os.scandir(existing_output_path):
+                new_entry_name = entry.name
+                while os.path.exists(os.path.join(new_output_path, new_entry_name)):
+                    new_entry_name += "*"
+                os.rename(os.path.join(existing_output_path, entry.name), os.path.join(new_output_path, new_entry_name))
+            os.rmdir(existing_output_path)
+        else:
+            os.rename(existing_output_path, new_output_path)
+        return new_configuration_name
+    else:
+        return None
+
+def delete_configuration(foodcoop, configuration):
+    config = read_config(foodcoop)
+    deleted_configuration = config.pop(configuration, None)
+    save_config(foodcoop, config)
+    updated_config = read_config(foodcoop)
+    if deleted_configuration:
+        if deleted_configuration in updated_config.items():
+            deleted_configuration = None
+    return deleted_configuration
 
 def read_foodsoft_config():
     foodcoop = "unnamed foodcoop"
@@ -241,7 +273,7 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notificati
     foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = read_foodsoft_config()
 
     # Connect to your Foodsoft instance and download the articles CSV of the supplier
-    if foodsoft_url and foodsoft_user and foodsoft_password:
+    if foodsoft_url and foodsoft_user and foodsoft_password and supplier_id:
         fsc = FSConnector(url=foodsoft_url, supplier_id=supplier_id, user=foodsoft_user, password=foodsoft_password)
         csv_from_foodsoft = csv.reader(fsc.get_articles_CSV().splitlines(), delimiter=';')
         articles_from_foodsoft = read_articles_from_csv(csv_from_foodsoft)

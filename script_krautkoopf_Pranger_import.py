@@ -278,17 +278,20 @@ def run(foodcoop, configuration):
     base.write_txt(file_path=base.file_path(path=path, folder="display", file_name="Zusammenfassung"), content=message)
 
 def config_variables(): # List of the special config variables this script uses, whether they are required and how they could look like
-    cat_ignore = base.Variable(name="categories to ignore", required=False, example=[2, 3, 9])
-    subcat_ignore = base.Variable(name="subcategories to ignore", required=False, example=[3, 51])
-    art_ignore = base.Variable(name="articles to ignore", required=False, example=[24245, 23953])
-    message_prefix = base.Variable(name="message prefix", required=False, example="Hallo")
-    return [cat_ignore, subcat_ignore, art_ignore, message_prefix]
+    return [
+        base.Variable(name="Foodsoft supplier ID", required=False, example=12),
+        base.Variable(name="categories to ignore", required=False, example=[2, 3, 9]),
+        base.Variable(name="subcategories to ignore", required=False, example=[3, 51]),
+        base.Variable(name="articles to ignore", required=False, example=[24245, 23953]),
+        base.Variable(name="message prefix", required=False, example="Hallo")
+        ]
 
 def environment_variables(): # List of the special environment variables this script uses, whether they are required and how they could look like
-    foodsoft_url = base.Variable(name="LS_FOODSOFT_URL", required=False, example="https://app.foodcoops.at/coop_xy/")
-    foodsoft_user = base.Variable(name="LS_FOODSOFT_URL", required=False, example="name@foobar.com")
-    foodsoft_pass = base.Variable(name="LS_FOODSOFT_PASS", required=False, example="asdf1234")
-    return [foodsoft_url, foodsoft_user, foodsoft_pass]
+    return [
+        base.Variable(name="LS_FOODSOFT_URL", required=False, example="https://app.foodcoops.at/coop_xy/"),
+        base.Variable(name="LS_FOODSOFT_URL", required=False, example="name@foobar.com"),
+        base.Variable(name="LS_FOODSOFT_PASS", required=False, example="asdf1234")
+        ]
 
 def inputs(): # List of the inputs this script takes, whether they are required, what type of input, how it could look like etc.
     return []

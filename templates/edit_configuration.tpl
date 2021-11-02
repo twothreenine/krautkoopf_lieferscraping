@@ -11,11 +11,11 @@
             <p>{{messages}}</p>
             <h1>{{configuration}} Konfiguration</h1>
             <form action="/{{fc}}/{{configuration}}" method="post">
+                Name: <input name="configuration name" type="text" value="{{configuration}}" required><br/>
                 Skript: 
                 <select name="Script name" required>
                     {{!script_options}}
                 </select><br/>
-                Foodsoft supplier ID: <input name="Foodsoft supplier ID" type="number" value="{{fs_supplier_id}}"><br/>
                 {{!config_content}}
                 <br><br>
                 <input type="submit" value="Speichern">
