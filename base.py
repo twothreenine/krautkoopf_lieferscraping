@@ -4,7 +4,46 @@ import logging
 import json
 import datetime
 import re
+import dill
 from foodsoft import FSConnector
+
+class Run:
+    def __init__(self, foodcoop, configuration, name="", next_possible_methods=[]):
+        self.path, self.name = prepare_output(foodcoop=foodcoop, configuration=configuration, name=name)
+        self.foodcoop = foodcoop
+        self.configuration = configuration
+        self.next_possible_methods = next_possible_methods
+        self.completion_percentage = 0
+
+    def save(self):
+        file_path = os.path.join(self.path, "run.obj")
+        with open(file_path, 'wb') as file:
+            dill.dump(self, file)
+
+    @classmethod
+    def load(cls, path):
+        with open(os.path.join(path, "run.obj"), 'rb') as file:
+            return dill.load(file)
+
+class ScriptMethod:
+    def __init__(self, name, inputs=[]):
+        self.name = name
+        self.inputs = inputs
+
+class Variable:
+    def __init__(self, name, required=False, example=None, description=""):
+        self.name = name
+        self.required = required
+        self.example = example
+        self.description = description
+
+class Input:
+    def __init__(self, name, required=False, accepted_file_types=[], example=None, description=""):
+        self.name = name
+        self.required = required
+        self.accepted_file_types = accepted_file_types # for example ["csv"], or [] if not a file
+        self.example = example # important (if not a file) to know which type of input should be asked for
+        self.description = description
 
 class Article:
     def __init__(self, order_number, name, unit, price_net, available=True, note="", manufacturer="", origin="", vat=0, deposit=0, unit_quantity=1, category="", ignore=False, orig_unit="", temp=""):
@@ -29,21 +68,6 @@ class Category:
         self.number = number
         self.name = name
         self.subcategories = subcategories
-
-class Variable:
-    def __init__(self, name, required=False, example=None, description=""):
-        self.name = name
-        self.required = required
-        self.example = example
-        self.description = description
-
-class Input:
-    def __init__(self, name, required=False, accepted_file_types=[], example=None, description=""):
-        self.name = name
-        self.required = required
-        self.accepted_file_types = accepted_file_types # for example ["csv"], or [] if not a file
-        self.example = example # important (if not a file) to know which type of input should be asked for
-        self.description = description
 
 def remove_double_strings_loop(text, string, description=None, number_of_runs=100):
     loop_count = 0
@@ -156,7 +180,7 @@ def get_CSVs(foodcoop, configuration):
     for output in outputs:
         csv_path = os.path.join(path, output, "download")
         if os.path.exists(csv_path):
-            CSVs = [f for f in os.listdir(csv_path) if f.endswith(".csv")]
+            CSVs = [os.path.join(csv_path, f) for f in os.listdir(csv_path) if f.endswith(".csv")]
             if len(CSVs) > 1:
                 print("Warning: Multiple CSVs found for " + output)
             if CSVs:
@@ -288,7 +312,7 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notificati
     else:
         last_csv = files[-1] # TODO: It should be saved in a Config file which CSV was last imported, and then be chosen here
         notifications.append("It was assumed '" + last_csv + "' was the last CSV imported into Foodsoft.")
-        with open("output/" + foodcoop + "/" + supplier + "/" + last_csv, newline='', encoding='utf-8') as csvfile:
+        with open(last_csv, newline='', encoding='utf-8') as csvfile:
             last_csv_opened = csv.reader(csvfile, delimiter=';')
             articles_from_last_run = read_articles_from_csv(last_csv_opened)
 
@@ -426,22 +450,27 @@ def compose_articles_csv_message(supplier, supplier_id=None, categories=[], igno
             text += "\n- " + notification
     return text
 
-def prepare_output(foodcoop, configuration):
+def prepare_output(foodcoop, configuration, name=""):
     path = "output"
     os.makedirs(path, exist_ok=True)
     path = os.path.join(path, foodcoop)
     os.makedirs(path, exist_ok=True)
     path = os.path.join(path, configuration)
     os.makedirs(path, exist_ok=True)
-    date = datetime.date.today().isoformat()
-    path = os.path.join(path, date)
-    number = 1
-    while os.path.isdir(path + "_" + str(number)):
-        number += 1
-    path += "_" + str(number)
-    date += "_" + str(number)
+    if name:
+        path = os.path.join(path, name)
+        os.makedirs(path, exist_ok=True)
+    else:
+        name = datetime.date.today().isoformat()
+        path = os.path.join(path, name)
+        number = 1
+        while os.path.isdir(path + "_" + str(number)):
+            number += 1
+        path += "_" + str(number)
+        name += "_" + str(number)
+        os.makedirs(path, exist_ok=True)
 
-    return path, date
+    return path, name
 
 def file_path(path, folder, file_name):
     path = os.path.join(path, folder)

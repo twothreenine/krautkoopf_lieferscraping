@@ -4,6 +4,7 @@ import base
 import os
 import numbers
 import json
+import importlib
 from zipfile import ZipFile
 import re
 
@@ -34,8 +35,8 @@ def convert_urls_to_links(text):
 def configuration_link(configuration):
     return bottle.template("<a href='/{{foodcoop}}/{{configuration}}'>{{configuration}}</a>", foodcoop=foodcoop, configuration=configuration)
 
-def display_output_link(configuration, run):
-    return bottle.template("<a href='/{{foodcoop}}/{{configuration}}/display/{{run}}'>{{run}}</a>", foodcoop=foodcoop, configuration=configuration, run=run)
+def display_output_link(configuration, run_name):
+    return bottle.template("<a href='/{{foodcoop}}/{{configuration}}/display/{{run_name}}'>{{run_name}}</a>", foodcoop=foodcoop, configuration=configuration, run_name=run_name)
 
 def available_scripts():
     script_files = [f for f in os.listdir() if f.startswith("script_") and f.endswith(".py")]
@@ -67,54 +68,62 @@ def script_options(selected_script=None):
         script_options += "<option value='{}' {}>{}</option>".format(value, selected, script[0].capitalize() + ": " + script[1])
     return script_options
 
-def get_script_name(configuration):
+def import_script(configuration):
+    importlib.invalidate_caches()
     config = base.read_config(foodcoop=foodcoop, configuration=configuration)
-    script = "script_" + base.read_in_config(config=config, detail="Script name")
+    script_name = "script_" + base.read_in_config(config=config, detail="Script name")
+    script = importlib.import_module(script_name)
     return script
 
-def run_path(configuration, run):
-    return os.path.join("output", foodcoop, configuration, run)
+def run_path(configuration, run_name):
+    return os.path.join("output", foodcoop, configuration, run_name)
 
 def list_files(path, folder="download"):
-    return [f for f in os.listdir(os.path.join(path, folder))]
+    files = []
+    files_path = os.path.join(path, folder)
+    if os.path.exists(files_path):
+        files = [f for f in os.listdir(files_path)]
+    return files
 
-def zip_download(configuration, run):
-    path = run_path(configuration, run)
+def zip_download(configuration, run_name):
+    path = run_path(configuration, run_name)
     files = list_files(path)
-    zip_filepath = os.path.join(path, configuration + "_" + run + ".zip")
-    if not os.path.isfile(zip_filepath):
-        with ZipFile(zip_filepath, 'w') as zipObj:
-            for file in files:
-                download_filepath = os.path.join(path, "download", file)
-                zipObj.write(download_filepath, os.path.basename(download_filepath))
+    zip_filepath = os.path.join(path, configuration + "_" + run_name + ".zip")
+    with ZipFile(zip_filepath, 'w') as zipObj:
+        for file in files:
+            download_filepath = os.path.join(path, "download", file)
+            zipObj.write(download_filepath, os.path.basename(download_filepath))
     source = "/download/" + zip_filepath
     return source
 
-def output_link_with_download_button(configuration, run):
-    path = run_path(configuration, run)
+def output_link_with_download_button(configuration, script, run_name):
+    path = run_path(configuration, run_name)
+    run = script.ScriptRun.load(path=path)
     files = list_files(path)
-    output_link = display_output_link(configuration, run)
+    output_link = display_output_link(configuration, run_name)
+    input_field = ""
+    source = ""
     if files:
         if len(files) == 1:
-            source = "/download/output/" + foodcoop + "/" + configuration + "/" + run + "/download/" + files[0]
+            source = "/download/" + run_path(configuration, run_name) + "/download/" + files[0]
         else:
-            source = zip_download(configuration, run)
-        return bottle.template('templates/download_button.tpl', source=source, value="⤓", affix=" " + output_link)
-    else:
-        return output_link
+            source = zip_download(configuration, run_name)
+        input_field = "<input type='submit' value='⤓'>"
+    progress_bar = '<progress id="run" value="{}" max="100"></progress>'.format(run.completion_percentage)
+    return bottle.template("<form action='{{source}}'>{{!input_field}} {{!affix}} {{!progress_bar}}</form>", source=source, input_field=input_field, affix=output_link, progress_bar=progress_bar)
 
-def all_download_buttons(configuration, run):
+def all_download_buttons(configuration, run_name):
     content = ""
-    path = run_path(configuration, run)
-    files = [f for f in os.listdir(os.path.join(path, "download"))]
+    path = run_path(configuration, run_name)
+    files = list_files(path)
     if len(files) > 1:
-        content += bottle.template('templates/download_button.tpl', source=zip_download(configuration, run), value="⤓ ZIP", affix="")
+        content += bottle.template('templates/download_button.tpl', source=zip_download(configuration, run_name), value="⤓ ZIP", affix="")
     for file in files:
-        source = "/download/output/" + foodcoop + "/" + configuration + "/" + run + "/download/" + file
+        source = "/download/output/" + foodcoop + "/" + configuration + "/" + run_name + "/download/" + file
         content += bottle.template('templates/download_button.tpl', source=source, value="⤓ " + file, affix="")
     return content
 
-def display_content(path, display_type="display"):
+def display(path, display_type="display"):
     display_content = ""
     file_path = os.path.join(path, display_type)
     if os.path.exists(file_path):
@@ -137,7 +146,7 @@ def add_configuration(submitted_form):
     else:
         base.save_configuration(foodcoop=foodcoop, configuration=new_config_name, configuration_config={"Script name": submitted_form.get('script name')})
         messages.append("Konfiguration angelegt.")
-        script = __import__(get_script_name(configuration=new_config_name))
+        script = import_script(configuration=new_config_name)
         config_variables = script.config_variables()
         if config_variables:
             return edit_configuration_page(configuration=new_config_name)
@@ -208,17 +217,18 @@ def login_page(fc):
         return bottle.template('templates/false_url.tpl', foodcoop=fc)
 
 def configuration_page(configuration):
+    script = import_script(configuration=configuration)
     output_content = ""
     outputs = base.get_outputs(foodcoop=foodcoop, configuration=configuration)
     if not outputs:
         output_content += "Keine Ausführungen gefunden."
     outputs.reverse()
-    for index in range(5):
+    for index in range(5): # TODO: put number of listed outputs in config
         if index+1 > len(outputs):
             break
         if output_content:
             output_content += "<br/>"
-        output_content += output_link_with_download_button(configuration=configuration, run=outputs[index])
+        output_content += output_link_with_download_button(configuration=configuration, script=script, run_name=outputs[index])
     config_content = ""
     config = base.read_config(foodcoop=foodcoop, configuration=configuration)
     for detail in config:
@@ -229,7 +239,6 @@ def configuration_page(configuration):
             config_content += str(len(config[detail])) + " manual changes"
         else:
             config_content += str(config[detail])
-    script = __import__(get_script_name(configuration=configuration))
     environment_variables = script.environment_variables()
     for variable in environment_variables:
         if config_content:
@@ -243,18 +252,21 @@ def configuration_page(configuration):
             config_content += "❌ " + variable.name
     return bottle.template('templates/configuration.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, output_content=output_content, config_content=config_content)
 
-def display_run_page(configuration, run):
-    content = ""
-    path = run_path(configuration, run)
-    downloads = all_download_buttons(configuration, run)
-    content += display_content(path=path, display_type="display")
-    content += display_content(path=path, display_type="details")
-    return bottle.template('templates/display_run.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, run=run, downloads=downloads, content=content)
+def run_page(configuration, script, run):
+    downloads = all_download_buttons(configuration, run.name)
+    continue_content = ""
+    for option in run.next_possible_methods:
+        inputs = ""
+        continue_content += bottle.template('templates/continue_option.tpl', fc=foodcoop, configuration=configuration, run_name=run.name, option_name=option.name, description="", inputs=inputs)
+    display_content = ""
+    display_content += display(path=run.path, display_type="display")
+    display_content += display(path=run.path, display_type="details")
+    return bottle.template('templates/run.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, run=run, completion_percentage=run.completion_percentage, downloads=downloads, continue_content=continue_content, display_content=display_content)
 
 def edit_configuration_page(configuration):
     config_content = ""
     config = base.read_config(foodcoop=foodcoop, configuration=configuration)
-    script = __import__(get_script_name(configuration=configuration))
+    script = import_script(configuration=configuration)
     config_variables = script.config_variables()
     for detail in config:
         if detail == "Script name":
@@ -373,11 +385,15 @@ def configuration(fc, configuration):
     else:
         return login_page(fc)
 
-@bottle.route('/<fc>/<configuration>/display/<run>')
-def display_run(fc, configuration, run):
+@bottle.route('/<fc>/<configuration>/display/<run_name>')
+def display_run(fc, configuration, run_name):
     global logged_in
     if logged_in:
-        return display_run_page(configuration, run)
+        importlib.invalidate_caches()
+        script = import_script(configuration=configuration)
+        path = run_path(configuration, run_name)
+        run = script.ScriptRun.load(path=path)
+        return run_page(configuration, script, run)
     else:
         return login_page(fc)
 
@@ -391,14 +407,31 @@ def save_configuration(fc, configuration):
     else:
         return login_page(fc)
 
-@bottle.route('/<fc>/<configuration>/run')
-def run_script(fc, configuration):
+@bottle.route('/<fc>/<configuration>/new_run')
+def start_script_run(fc, configuration):
     global logged_in
     if logged_in:
-        script = __import__(get_script_name(configuration=configuration))
-        script.run(foodcoop=foodcoop, configuration=configuration)
-        messages.append("Skript erfolgreich ausgeführt.")
-        return configuration_page(configuration)
+        script = import_script(configuration=configuration)
+        run = script.ScriptRun(foodcoop=foodcoop, configuration=configuration)
+        run.save()
+        return run_page(configuration, script, run)
+    else:
+        return login_page(fc)
+
+@bottle.route('/<fc>/<configuration>/display/<run_name>', method='POST')
+def execute_script_method(fc, configuration, run_name):
+    global logged_in
+    if logged_in:
+        script = import_script(configuration=configuration)
+        path = run_path(configuration, run_name)
+        run = script.ScriptRun.load(path=path)
+        submitted_form = bottle.request.forms
+        method = submitted_form.get('method')
+        func = getattr(run, method)
+        func()
+        run.save()
+        messages.append(method + " wurde ausgeführt.")
+        return run_page(configuration, script, run)
     else:
         return login_page(fc)
 

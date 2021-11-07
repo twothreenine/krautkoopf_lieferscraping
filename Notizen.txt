@@ -2,11 +2,19 @@
 - Artikel können per CSV nicht auf inaktiv gesetzt, sondern nur gelöscht werden - ändern?
 
 aktuell:
-- In Config festhalten, welche CSVs (zuletzt) importiert wurden: last_imported_CSVs
-- Webinterface zum Ausführen von Skripten auf Anforderung; bestätigen, ob die CSV daraufhin auch hochgeladen wurde:
-	- Skript-ausführen-Seite (Fortschritt, Message, Download, Bestätigen ob hochgeladen -> Speichern in Config)
-(- Option Skript in bestimmtem Turnus automatisch ausführen zu lassen, z.B. jeden Donnerstag um 6:00 Uhr?)
+- Webinterface
+	- Config-Kategorien (ausklappbar auf Startseite der Foodcoop)
+	- Inputs auf Skript-ausführen-Seite
+	- Aufbau anpassen (u.a. Labels, geordneter)
+	(- Option Skript in bestimmtem Turnus automatisch ausführen zu lassen, z.B. jeden Donnerstag um 6:00 Uhr)
+- Pranger-Skript an Neuerungen anpassen
+	- Zusätzliche Methode: In Config festhalten, welche CSVs (zuletzt) importiert wurden: last_imported_CSVs
+- Artikel-import-Funktionen aus base auslagern
 (- Ignore-Feature für Produzenten, Herkunft und Herkunft-startet-mit (z.B. PLZ 2...))
 - Locales
-- Nächste Skripte: Fairfood, Cafe Libertad
+- Nächste Skripte: Fairfood, Cafe Libertad, Hiel ...
 	auch jeweils Skript um Bestellung abzuschicken? auch für Pranger?
+
+Ideen für Tools mit ähnlichem (eigenen) Web-Interface:
+- Taskrotation
+- Kerndlflows-Tools mit Python-Matrix-Anbindung
