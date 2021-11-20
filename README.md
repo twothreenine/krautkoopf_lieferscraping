@@ -12,6 +12,8 @@ requests v2.24+
 
 bottle v0.12+
 
+dill
+
 ## Environment variables
 For some optional features, the following enviroment variables need to be set:
 - LS_FOODSOFT_URL=

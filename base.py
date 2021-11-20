@@ -84,8 +84,11 @@ def remove_double_strings_loop(text, string, description=None, number_of_runs=10
 
 def read_config(foodcoop, configuration="", ensure_subconfig=""):
     filename = "config_" + foodcoop + ".json"
-    with open(filename) as json_file:
-        config = json.load(json_file)
+    if os.path.isfile(filename):
+        with open(filename) as json_file:
+            config = json.load(json_file)
+    else:
+        config = {}
     if configuration:
         if configuration not in config:
             configuration_config = {}
