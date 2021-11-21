@@ -5,10 +5,28 @@ from json import dumps
 import logging
 import requests
 import os
+import re
 from bs4 import BeautifulSoup as bs
 import urllib.request
 
 logging.basicConfig(level=logging.DEBUG)
+
+def read_foodsoft_config():
+    foodcoop = "unnamed foodcoop"
+    foodsoft_url = None
+    if 'LS_FOODSOFT_URL' in os.environ:
+        foodsoft_url = os.environ['LS_FOODSOFT_URL']
+        foodcoop_list = re.split(".*/(.*)/", foodsoft_url)
+        if len(foodcoop_list) < 2:
+            logging.error("Could not extract foodcoop name from url " + foodsoft_url)
+        else:
+            foodcoop = foodcoop_list[1]
+    foodsoft_user = None
+    foodsoft_password = None
+    if 'LS_FOODSOFT_USER' in os.environ and 'LS_FOODSOFT_PASS' in os.environ:
+        foodsoft_user = os.environ['LS_FOODSOFT_USER']
+        foodsoft_password = os.environ['LS_FOODSOFT_PASS']
+    return foodcoop, foodsoft_url, foodsoft_user, foodsoft_password
 
 class FSConnector:
     def __init__(self, url, supplier_id, user=None, password=None):

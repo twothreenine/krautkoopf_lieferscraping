@@ -2,10 +2,11 @@ from bs4 import BeautifulSoup
 import requests
 import re
 import os
+
 import base
 
 # Inputs this script's methods take
-# no inputs
+# no inputs taken
 
 # Executable script methods
 generate_csv = base.ScriptMethod(name="generate_csv")
@@ -32,8 +33,8 @@ def environment_variables(): # List of the special environment variables this sc
         ]
 
 class ScriptRun(base.Run):
-    def __init__(self, foodcoop, configuration):
-        super().__init__(foodcoop=foodcoop, configuration=configuration)
+    def __init__(self, foodcoop, configuration, started_by):
+        super().__init__(foodcoop=foodcoop, configuration=configuration, started_by=started_by)
         self.next_possible_methods = [generate_csv]
         self._session = None
 
@@ -90,7 +91,7 @@ class ScriptRun(base.Run):
         self.completion_percentage = 100
 
 if __name__ == "__main__":
-    run = ScriptRun(foodcoop="Test coop", configuration="Test supplier")
+    run = ScriptRun(foodcoop="Test coop", configuration="Test supplier", started_by="Test user")
     while run.next_possible_methods:
         func = getattr(run, run.next_possible_methods[0].name)
         func()

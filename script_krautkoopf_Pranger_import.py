@@ -1,33 +1,90 @@
 from bs4 import BeautifulSoup
 import requests
 import re
+
 import base
+import foodsoft_article
+import foodsoft_article_import
 
-# Global variables
-categories = []
-articles = []
-ignored_categories = []
-ignored_subcategories = []
-ignored_articles = []
-notifications = []
-supplier_id = None
-categories_to_ignore = []
-subcategories_to_ignore = []
-articles_to_ignore = []
+# Inputs this script's methods take
+# no inputs taken
 
-menu = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.222C/categories.jsp?intern=1").text, features="html.parser")
+# Executable script methods
+generate_csv = base.ScriptMethod(name="generate_csv")
+set_as_imported = base.ScriptMethod(name="set_as_imported")
+
+def config_variables(): # List of the special config variables this script uses, whether they are required and how they could look like
+    return [
+        base.Variable(name="Foodsoft supplier ID", required=False, example=12),
+        base.Variable(name="last imported run", required=False),
+        base.Variable(name="categories to ignore", required=False, example=[2, 3, 9]),
+        base.Variable(name="subcategories to ignore", required=False, example=[3, 51]),
+        base.Variable(name="articles to ignore", required=False, example=[24245, 23953]),
+        base.Variable(name="message prefix", required=False, example="Hallo")
+        ]
+
+def environment_variables(): # List of the special environment variables this script uses, whether they are required and how they could look like
+    return [
+        base.Variable(name="LS_FOODSOFT_URL", required=False, example="https://app.foodcoops.at/coop_xy/"),
+        base.Variable(name="LS_FOODSOFT_URL", required=False, example="name@foobar.com"),
+        base.Variable(name="LS_FOODSOFT_PASS", required=False, example="asdf1234")
+        ]
+
+class ScriptRun(base.Run):
+    def __init__(self, foodcoop, configuration, started_by):
+        super().__init__(foodcoop=foodcoop, configuration=configuration, started_by=started_by)
+        self.next_possible_methods = [generate_csv]
+
+    def generate_csv(self):
+        config = base.read_config(self.foodcoop, self.configuration)
+        supplier_id = base.read_in_config(config, "Foodsoft supplier ID", None)
+        categories_to_ignore = base.read_in_config(config, "categories to ignore", [])
+        subcategories_to_ignore = base.read_in_config(config, "subcategories to ignore", [])
+        articles_to_ignore = base.read_in_config(config, "articles to ignore", [])
+        articles = []
+        categories = []
+        ignored_articles = []
+        ignored_categories = []
+        ignored_subcategories = []
+        notifications = []
+
+        for cat_id in range(20):
+            subcats, categories, ignored_subcategories = getSubcategories(cat_id, categories, ignored_subcategories, categories_to_ignore, subcategories_to_ignore)
+            articles, ignored_articles = getArticles(subcats, articles, ignored_articles, articles_to_ignore)
+
+        for cat_id in range(20):
+            cat, categories, ignored_categories = getCategory(cat_id, categories, ignored_categories, categories_to_ignore)
+            articles, ignored_articles = getArticles(cat, articles, ignored_articles, articles_to_ignore)
+
+        articles = foodsoft_article_import.remove_articles_to_ignore(articles)
+        articles = foodsoft_article_import.rename_duplicates(articles)
+        articles, notifications = foodsoft_article_import.compare_manual_changes(foodcoop=self.foodcoop, supplier=self.configuration, supplier_id=supplier_id, articles=articles, notifications=notifications)
+        notifications = foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=articles, notifications=notifications)
+        message_prefix = base.read_in_config(config, "message prefix", "")
+        message = foodsoft_article_import.compose_articles_csv_message(supplier=self.configuration, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications, prefix=message_prefix)
+        base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Zusammenfassung"), content=message)
+
+        self.next_possible_methods = [set_as_imported]
+        self.completion_percentage = 80
+
+    def set_as_imported(self):
+        base.set_configuration_detail(foodcoop=self.foodcoop, configuration=self.configuration, detail="last imported run", value=self.name)
+
+        self.next_possible_methods = []
+        self.completion_percentage = 100
 
 class PriceOption:
     def __init__(self, price, unit):
         self.price = price
         self.unit = unit
 
-def getSubcategories(id):
+def getSubcategories(cat_id, categories, ignored_subcategories, categories_to_ignore, subcategories_to_ignore):
     subcats = []
-    print('sg'+str(id))
-    category = base.Category(number=id)
+    print('sg'+str(cat_id))
+    category = base.Category(number=cat_id)
     category.subcategories = []
-    subgroup = menu.body.find(id=('sg'+str(id)))
+    menu = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.222C/categories.jsp?intern=1").text, features="html.parser")
+    subgroup = menu.body.find(id=('sg'+str(cat_id)))
     if subgroup:
         subcat_links = subgroup.find_all('a')
         for sc in subcat_links:
@@ -46,25 +103,26 @@ def getSubcategories(id):
 
     if category.number not in categories_to_ignore:
         categories.append(category)
-    return subcats
+    return subcats, categories, ignored_subcategories
 
-def getCategory(id):
-    parsed_html = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.219C/category.jsp?categoryid="+str(id)+"&cartredir=1").text, features="html.parser")
+def getCategory(cat_id, categories, ignored_categories, categories_to_ignore):
+    parsed_html = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.219C/category.jsp?categoryid="+str(cat_id)+"&cartredir=1").text, features="html.parser")
     name = parsed_html.body.find(class_="font2 ic2").get_text().strip()
-    existing_categories = [x for x in categories if x.number == id]
+    existing_categories = [x for x in categories if x.number == cat_id]
     if existing_categories:
         category = existing_categories[0]
         category.name = name
     else:
-        category = base.Category(number=str(id), name=name)
-    if id in categories_to_ignore:
+        category = base.Category(number=str(cat_id), name=name)
+    if cat_id in categories_to_ignore:
         ignored_categories.append(category)
-        return []
+        cat = []
     else:
         if not existing_categories:
             categories.append(category)
         table = parsed_html.body.find_all('table')
-        return [{"name" : name, "number" : str(id), "items" : table, "ignore" : False}]
+        cat = [{"name" : name, "number" : str(cat_id), "items" : table, "ignore" : False}]
+    return cat, categories, ignored_categories
 
 def getIfFound(src, class_name):
     item = src.find(class_=class_name)
@@ -130,7 +188,7 @@ def matchCategories(name, note, category_number, cat_name):
 def baseprice_suffix(base_price, base_unit):
     return " ({}€/{})".format("{:.2f}".format(base_price).replace(".", ","), base_unit)
 
-def getArticles(category):
+def getArticles(category, articles, ignored_articles, articles_to_ignore):
     for subcat in category:
         if subcat["items"] == [] : 
             continue
@@ -237,7 +295,7 @@ def getArticles(category):
             note = base.remove_double_strings_loop(text=note, string=" ", description="whitespaces")
 
             cat_name = matchCategories(name=name, note=note, category_number=subcat["number"], cat_name=cat_name)
-            article = base.Article(order_number=order_number, name=name, note=note, unit=favorite_option.unit, price_net=favorite_option.price, category=cat_name, manufacturer=producer, origin=origin, ignore=ignore, orig_unit=unit_info)
+            article = foodsoft_article.Article(order_number=order_number, name=name, note=note, unit=favorite_option.unit, price_net=favorite_option.price, category=cat_name, manufacturer=producer, origin=origin, ignore=ignore, orig_unit=unit_info)
             if int(order_number) in articles_to_ignore:
                 article.ignore = True
                 ignored_articles.append(article)
@@ -247,55 +305,11 @@ def getArticles(category):
                 ignored_articles.append(article)
             articles.append(article)
 
-def run(foodcoop, configuration):
-    config = base.read_config(foodcoop, configuration)
-    global supplier_id
-    supplier_id = base.read_in_config(config, "Foodsoft supplier ID", None)
-    global categories_to_ignore
-    categories_to_ignore = base.read_in_config(config, "categories to ignore", [])
-    global subcategories_to_ignore
-    subcategories_to_ignore = base.read_in_config(config, "subcategories to ignore", [])
-    global articles_to_ignore
-    articles_to_ignore = base.read_in_config(config, "articles to ignore", [])
-
-    for idx in range(20) :
-        cat = getSubcategories(idx)
-        getArticles(cat)
-
-    for idx in range(20) :
-        cat = getCategory(idx)
-        getArticles(cat)
-
-    global articles
-    global notifications
-    articles = base.remove_articles_to_ignore(articles)
-    articles = base.rename_duplicates(articles)
-    articles, notifications = base.compare_manual_changes(foodcoop=foodcoop, supplier=configuration, supplier_id=supplier_id, articles=articles, notifications=notifications)
-    path, date = base.prepare_output(foodcoop=foodcoop, configuration=configuration)
-    notifications = base.write_articles_csv(file_path=base.file_path(path=path, folder="download", file_name=configuration + "_Artikel_" + date), articles=articles, notifications=notifications)
-    message_prefix = base.read_in_config(config, "message prefix", "")
-    message = base.compose_articles_csv_message(supplier=configuration, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications, prefix=message_prefix)
-    base.write_txt(file_path=base.file_path(path=path, folder="display", file_name="Zusammenfassung"), content=message)
-
-def config_variables(): # List of the special config variables this script uses, whether they are required and how they could look like
-    return [
-        base.Variable(name="Foodsoft supplier ID", required=False, example=12),
-        base.Variable(name="categories to ignore", required=False, example=[2, 3, 9]),
-        base.Variable(name="subcategories to ignore", required=False, example=[3, 51]),
-        base.Variable(name="articles to ignore", required=False, example=[24245, 23953]),
-        base.Variable(name="message prefix", required=False, example="Hallo")
-        ]
-
-def environment_variables(): # List of the special environment variables this script uses, whether they are required and how they could look like
-    return [
-        base.Variable(name="LS_FOODSOFT_URL", required=False, example="https://app.foodcoops.at/coop_xy/"),
-        base.Variable(name="LS_FOODSOFT_URL", required=False, example="name@foobar.com"),
-        base.Variable(name="LS_FOODSOFT_PASS", required=False, example="asdf1234")
-        ]
-
-def inputs(): # List of the inputs this script takes, whether they are required, what type of input, how it could look like etc.
-    return []
+    return articles, ignored_articles
 
 if __name__ == "__main__":
-    message = run(foodcoop="krautkoopf", configuration="Biohof Pranger")
-    print(message)
+    run = ScriptRun(foodcoop="krautkoopf", configuration="Biohof Pranger", started_by="Konsole")
+    while run.next_possible_methods:
+        func = getattr(run, run.next_possible_methods[0].name)
+        func()
+    run.save()

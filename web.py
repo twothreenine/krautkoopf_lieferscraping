@@ -1,14 +1,16 @@
 import bottle
 import re
-import base
 import os
 import numbers
 import json
 import importlib
 from zipfile import ZipFile
-import re
 
-foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = base.read_foodsoft_config()
+import base
+import foodsoft
+
+foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = foodsoft.read_foodsoft_config()
+username = foodcoop.capitalize() + "-Mitglied" # placeholder for user
 logged_in = False
 messages = []
 
@@ -144,7 +146,7 @@ def add_configuration(submitted_form):
         messages.append("Es existiert bereits eine Konfiguration namens " + new_config_name + " für " + foodcoop.capitalize() + ". Bitte wähle einen anderen Namen.")
         return new_configuration_page()
     else:
-        base.save_configuration(foodcoop=foodcoop, configuration=new_config_name, configuration_config={"Script name": submitted_form.get('script name')})
+        base.save_configuration(foodcoop=foodcoop, configuration=new_config_name, new_config={"Script name": submitted_form.get('script name')})
         messages.append("Konfiguration angelegt.")
         script = import_script(configuration=new_config_name)
         config_variables = script.config_variables()
@@ -175,7 +177,7 @@ def save_configuration_edit(configuration, submitted_form):
             config[name] = value
         elif name in config:
             config.pop(name)
-    base.save_configuration(foodcoop=foodcoop, configuration=configuration, configuration_config=config)
+    base.save_configuration(foodcoop=foodcoop, configuration=configuration, new_config=config)
     configuration_name = submitted_form.get('configuration name')
     if configuration_name != configuration:
         renamed_configuration = base.rename_configuration(foodcoop=foodcoop, old_configuration_name=configuration, new_configuration_name=configuration_name)
@@ -217,20 +219,21 @@ def login_page(fc):
         return bottle.template('templates/false_url.tpl', foodcoop=fc)
 
 def configuration_page(configuration):
+    config = base.read_config(foodcoop=foodcoop, configuration=configuration)
     script = import_script(configuration=configuration)
     output_content = ""
     outputs = base.get_outputs(foodcoop=foodcoop, configuration=configuration)
     if not outputs:
         output_content += "Keine Ausführungen gefunden."
     outputs.reverse()
-    for index in range(5): # TODO: put number of listed outputs in config
+    number_of_runs_to_list = base.read_in_config(config, "number of runs to list", 5)
+    for index in range(number_of_runs_to_list):
         if index+1 > len(outputs):
             break
         if output_content:
             output_content += "<br/>"
         output_content += output_link_with_download_button(configuration=configuration, script=script, run_name=outputs[index])
     config_content = ""
-    config = base.read_config(foodcoop=foodcoop, configuration=configuration)
     for detail in config:
         if config_content:
             config_content += "<br/>"
@@ -261,15 +264,33 @@ def run_page(configuration, script, run):
     display_content = ""
     display_content += display(path=run.path, display_type="display")
     display_content += display(path=run.path, display_type="details")
-    return bottle.template('templates/run.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, run=run, completion_percentage=run.completion_percentage, downloads=downloads, continue_content=continue_content, display_content=display_content)
+    return bottle.template('templates/run.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, run=run, started_by=run.started_by, completion_percentage=run.completion_percentage, downloads=downloads, continue_content=continue_content, display_content=display_content)
 
 def edit_configuration_page(configuration):
     config_content = ""
     config = base.read_config(foodcoop=foodcoop, configuration=configuration)
     script = import_script(configuration=configuration)
     config_variables = script.config_variables()
+    special_variables = ["Script name", "number of runs to list", "last imported run"]
+
+    if "last imported run" in [c_v.name for c_v in config_variables]:
+        runs = base.get_outputs(foodcoop=foodcoop, configuration=configuration)
+        if runs:
+            runs.reverse()
+            config_content += "Letzte importierte Ausführung: "
+            config_content += "<select name='{}'>".format("last imported run")
+            config_content += "<option>keine</option>"
+            last_imported_run = base.read_in_config(config, "last imported run", "")
+            for run in runs:
+                selected = ""
+                if run == last_imported_run:
+                    selected = " selected"
+                config_content += "<option value='{}'{}>{}</option>".format(run, selected, run)
+            config_content += "</select>"
+
+    # variables already set in config
     for detail in config:
-        if detail == "Script name":
+        if detail in special_variables:
             continue
         if config_content:
             config_content += "<br/>"
@@ -294,8 +315,9 @@ def edit_configuration_page(configuration):
             value = "value='" + str(config[detail]) + "'"
             config_content += "<input name='{}' type='{}' {} {} {}>".format(detail, input_type, value, placeholder, required)
 
+    # variables the script uses which are not yet in config
     for variable in config_variables:
-        if variable.name in config:
+        if variable.name in config or variable.name in special_variables:
             continue
         if config_content:
             config_content += "<br/>"
@@ -314,6 +336,7 @@ def edit_configuration_page(configuration):
             description = " ({})".format(variable.description)
         config_content += "<input name='{}' type='{}' {} {}>{}".format(variable.name, input_type, placeholder, required, description)
 
+    # list of environment variables and whether they are set
     environment_variables = script.environment_variables()
     if environment_variables:
         config_content += "<h2>Umgebungsvariablen</h2><p>Diese können nur manuell gesetzt werden.</p>"
@@ -337,7 +360,9 @@ def edit_configuration_page(configuration):
             config_content += " (Beispiel: " + variable.example + ")"
         config_content += "<br/>"
 
-    return bottle.template('templates/edit_configuration.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, config_content=config_content, script_options=script_options(selected_script=config["Script name"]))
+    number_of_runs_to_list = base.read_in_config(config, "number of runs to list", 5)
+
+    return bottle.template('templates/edit_configuration.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, number_of_runs_to_list=number_of_runs_to_list, config_content=config_content, script_options=script_options(selected_script=config["Script name"]))
 
 def delete_configuration_page(configuration):
     return bottle.template('templates/delete_configuration.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration)
@@ -412,7 +437,7 @@ def start_script_run(fc, configuration):
     global logged_in
     if logged_in:
         script = import_script(configuration=configuration)
-        run = script.ScriptRun(foodcoop=foodcoop, configuration=configuration)
+        run = script.ScriptRun(foodcoop=foodcoop, configuration=configuration, started_by=username)
         run.save()
         return run_page(configuration, script, run)
     else:

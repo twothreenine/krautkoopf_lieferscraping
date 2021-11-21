@@ -16,6 +16,7 @@
                 <select name="Script name" required>
                     {{!script_options}}
                 </select><br/>
+                Anzahl an Ausführungen, die aufgelistet werden sollen: <input name="number of runs to list" type="number" value="{{number_of_runs_to_list}}" required><br/>
                 {{!config_content}}
                 <br><br>
                 <input type="submit" value="Speichern">
