@@ -1,3 +1,5 @@
+import importlib
+
 import base
 import foodsoft_article
 import foodsoft_article_import
@@ -49,7 +51,9 @@ class ScriptRun(base.Run):
         self.completion_percentage = 100
 
 if __name__ == "__main__":
-    run = ScriptRun(foodcoop="Test coop", configuration="Test supplier", started_by="Test user")
+    importlib.invalidate_caches()
+    script = importlib.import_module("script_generic_test_import") # I don't know why we have to do this, but if the ScriptRun object is just initialized directly (run = ScriptRun(...)), then it doesn't load when we try to load in web ("AttributeError: Can't get attribute 'ScriptRun' on <module '__main__' from 'web.py'>")
+    run = script.ScriptRun(foodcoop="krautkoopf", configuration="Supplier X", started_by="Test user")
     while run.next_possible_methods:
         func = getattr(run, run.next_possible_methods[0].name)
         func()

@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup
 import requests
 import re
+import importlib
 
 import base
 import foodsoft_article
@@ -308,7 +309,9 @@ def getArticles(category, articles, ignored_articles, articles_to_ignore):
     return articles, ignored_articles
 
 if __name__ == "__main__":
-    run = ScriptRun(foodcoop="krautkoopf", configuration="Biohof Pranger", started_by="Konsole")
+    importlib.invalidate_caches()
+    script = importlib.import_module("script_krautkoopf_Pranger_import") # I don't know why we have to do this, but if the ScriptRun object is just initialized directly (run = ScriptRun(...)), then it doesn't load when we try to load in web ("AttributeError: Can't get attribute 'ScriptRun' on <module '__main__' from 'web.py'>")
+    run = script.ScriptRun(foodcoop="krautkoopf", configuration="Biohof Pranger", started_by="Konsole")
     while run.next_possible_methods:
         func = getattr(run, run.next_possible_methods[0].name)
         func()
