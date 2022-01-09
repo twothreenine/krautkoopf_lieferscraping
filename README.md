@@ -14,6 +14,8 @@ bottle v0.12+
 
 dill
 
+pyYAML
+
 ## Environment variables
 For some optional features, the following enviroment variables need to be set:
 - LS_FOODSOFT_URL=

@@ -1,0 +1,19 @@
+# variables
+Foodsoft supplier ID:
+    name: "ID von Lieferant*in in Foodsoft"
+categories to ignore:
+    name: "Zu ignorierende Kategorien"
+subcategories to ignore:
+    name: "Zu ignorierende Unterkategorien"
+articles to ignore:
+    name: "Zu ignorierende Artikel"
+message prefix:
+    name: "Text, der der Zusammenfassung vorangestellt wird"
+
+# methods
+generate_csv:
+    name: "CSV generieren"
+    description: "Hiermit wird der Webshop ausgelesen, die Artikeldaten mit denen aus der Foodsoft sowie den zuletzt hochgeladenen verglichen und eine CSV-Datei zum Hochladen in die Foodsoft generiert."
+set_as_imported:
+    name: "Als hochgeladen markieren"
+    description: "Hiermit wird diese CSV als zuletzt hochgeladene Artikelliste markiert. Dies ist wichtig beim nächsten Auslesen, damit manuelle Änderungen in der Foodsoft beim Import bzw. danach erkannt werden können. Wenn die Datei nicht hochgeladen wird, diesen Schritt also auslassen!"

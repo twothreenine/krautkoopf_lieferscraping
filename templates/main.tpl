@@ -9,7 +9,7 @@
         <div>
             <p>{{messages}}</p>
             <h1>{{foodcoop}} Lieferscraping</h1>
-            <h2>Skript-Konfigurationen</h2>
+            <h2>{{base_locales["script configurations"]}}</h2>
             <p>{{!configurations}}</p>
             <form action="/{{fc}}" method="post">
                 <input name="new configuration" value="Neue Konfiguration anlegen" type="submit" />

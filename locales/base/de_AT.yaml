@@ -1,0 +1,11 @@
+# general
+member: "{foodcoop}-Mitglied"
+script configurations: Skript-Konfigurationen
+none (feminine): keine
+
+# variables
+configuration name: "Name der Konfiguration"
+Script name: "Skript"
+number of runs to list: "Anzahl an Ausführungen, die aufgelistet werden sollen"
+last imported run: "Letzte importierte Ausführung"
+manual changes: "{} manuelle Änderungen"
