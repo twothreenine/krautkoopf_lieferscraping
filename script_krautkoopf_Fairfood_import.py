@@ -1,9 +1,14 @@
 from bs4 import BeautifulSoup
 import requests
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+import xml.etree.ElementTree as ET
 import re
 import os
 
 import base
+import foodsoft_article
 
 # Inputs this script's methods take
 # no inputs taken
@@ -37,6 +42,27 @@ class ScriptRun(base.Run):
         super().__init__(foodcoop=foodcoop, configuration=configuration, started_by=started_by)
         self.next_possible_methods = [generate_csv]
         self._session = None
+        self._driver = webdriver.Firefox() #Change here if you want use Chromium
+
+    def fetch_rss(self):
+        self._driver.get("https://www.fairfood.bio/feeds/google")
+        rss_xml = driver.page_source
+        return rss_xml
+
+    def parse_articles(self, xml):
+        rss_articles = ET.fromstring(xml).getroot()
+        ns = {'g': 'http://base.google.com/ns/1.0'}
+        for item in rss_articles.findall('./channel/item'):
+            # Get the value from the attribute 'name'
+            order_number = item.find('id', ns).text
+            name = item.find('title').text
+            price = item.find('g:price', ns).text
+            description = item.find('description').text
+            unit = item.find('g:unit_pricing_measure', ns).text
+            #print(f'name: {name}, price: {price}, unit: {unit}, desription: {description}')
+
+            #foodsoft_article.Article(order_number=orer_number, name=name, note=description, unit=TODO, price_net=TODO, category=TODO, manufacturer=TODO, origin=TODO, ignore=ignore, orig_unit=TODO)
+
 
     def generate_csv(self):
         config = base.read_config(self.foodcoop, self.configuration)
@@ -52,27 +78,26 @@ class ScriptRun(base.Run):
         username = os.environ['LS_FAIRFOOD_USER']
         password = os.environ['LS_FAIRFOOD_PASS']
 
+        #get B2C prices
+        b2c_xml = self.fetch_rss()
+        #self.parse_articles(b2c_xml)
+
         self.login(username, password)
+        #after login get B2B prices
+        b2b_xml = self.fetch_rss()
+        self.parse_articles(b2b_xml)
+
         self.next_possible_methods = []
 
-    def login(self, username, password):
-        login_url = "https://www.fairfood.bio/login"
-        login_page = BeautifulSoup(requests.get(login_url).text, features="html.parser")
-        token = login_page.find(attrs={"name":"_token"})["value"]
-        print(token)
-        self._session = requests.Session()
-        login_data = {
-            "_token": token,
-            "email": username,
-            "password": password
-            }
-        request = self._session.get(login_url)
-        response = self._session.post(login_url, data=login_data, cookies=request.cookies)
 
-        test_url = "https://www.fairfood.bio/produkt/2/cashewkerne-naturbelassen-organic-flo"
-        test_page = BeautifulSoup(self._session.get(test_url).text, features="html.parser")
-        test_string = test_page.find(attrs={"class":"font-headline text-2xl md:text-3xl leading-none pr-4"}).text
-        print(test_string)
+    def login(self, username, password):
+        self._driver.get("https://www.fairfood.bio/login")
+        self._driver.find_element(By.ID, "email").send_keys("username")
+        self._driver.find_element(By.ID, "password").send_keys("password")
+        login_button = self._driver.find_element(By.XPATH, "//button[@type='submit']")
+        login_button.click()
+        
+
 
         # articles = []
         # overlong_note = "This is a very long text. Since Foodsoft only supports up to 255 characters in the articles' data strings (note, manufacturer, origin) and won't validate them by itself, we have to resize it in order to not cause an error. Nobody would read it anyway to the end!"

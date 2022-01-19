@@ -16,6 +16,8 @@ dill
 
 pyYAML
 
+selenium (for Fairfood script)
+
 ## Environment variables
 For some optional features, the following enviroment variables need to be set:
 - LS_FOODSOFT_URL=
