@@ -2,6 +2,7 @@ import csv
 import os
 import logging
 import json
+import yaml
 import datetime
 import dill
 
@@ -82,9 +83,9 @@ def remove_double_strings_loop(text, string, description=None, number_of_runs=10
 
 def read_config(foodcoop, configuration="", ensure_subconfig=""):
     os.makedirs("config", exist_ok=True)
-    filename = "config/" + foodcoop + ".json"
+    filename = "config/" + foodcoop + "_configurations.json"
     if os.path.isfile(filename):
-        with open(filename) as json_file:
+        with open(filename, encoding="UTF8") as json_file:
             config = json.load(json_file)
     else:
         config = {}
@@ -108,8 +109,8 @@ def read_in_config(config, detail, alternative=None):
 
 def save_config(foodcoop, config):
     os.makedirs("config", exist_ok=True)
-    filename = "config/" + foodcoop + ".json"
-    with open(filename, "w") as json_file:
+    filename = "config/" + foodcoop + "_configurations.json"
+    with open(filename, "w", encoding="UTF8") as json_file:
         json.dump(config, json_file, indent=4)
 
 def save_configuration(foodcoop, configuration, new_config):
@@ -129,8 +130,11 @@ def set_configuration_detail(foodcoop, configuration, detail, value):
 def rename_configuration(foodcoop, old_configuration_name, new_configuration_name):
     config = read_config(foodcoop)
     if old_configuration_name in config:
+        # set new configuration name in config file
         config[new_configuration_name] = config.pop(old_configuration_name)
         save_config(foodcoop, config)
+
+        # rename folder
         existing_output_path = output_path(foodcoop, old_configuration_name)
         new_output_path = output_path(foodcoop, new_configuration_name)
         if os.path.exists(new_output_path):
@@ -142,6 +146,14 @@ def rename_configuration(foodcoop, old_configuration_name, new_configuration_nam
             os.rmdir(existing_output_path)
         else:
             os.rename(existing_output_path, new_output_path)
+
+        # update path attribute in run objects
+        run_folders = [d for d in os.listdir(new_output_path) if os.path.isdir(os.path.join(new_output_path, d))]
+        for run_folder in run_folders:
+            run = run.load(path=os.path.join(new_output_path, run_folder))
+            run.path = new_output_path
+            run.save()
+
         return new_configuration_name
     else:
         return None
@@ -155,6 +167,52 @@ def delete_configuration(foodcoop, configuration):
         if deleted_configuration in updated_config.items():
             deleted_configuration = None
     return deleted_configuration
+
+def read_settings(foodcoop):
+    os.makedirs("config", exist_ok=True)
+    filename = "config/" + foodcoop + "_settings.json"
+    if os.path.isfile(filename):
+        with open(filename, encoding="UTF8") as json_file:
+            settings = json.load(json_file)
+    else:
+        settings = {
+            "default_locale": "de_AT",
+            "configuration_groups": {
+            }
+        }
+    return settings
+
+def save_settings(foodcoop, settings):
+    os.makedirs("config", exist_ok=True)
+    filename = "config/" + foodcoop + "_settings.json"
+    with open(filename, "w", encoding="UTF8") as json_file:
+        json.dump(settings, json_file, indent=4)
+
+def set_setting(foodcoop, setting, value):
+    settings = read_settings(foodcoop)
+    settings[detail] = value
+    save_settings(foodcoop, settings)
+
+def read_locales(foodcoop, locale=None):
+    if not locale:
+        locale = read_settings(foodcoop)["default_locale"]
+    locales = {}
+    for package in os.listdir("locales"):
+        if not os.path.isdir(os.path.join("locales", package)):
+            continue
+        if os.path.isfile(os.path.join("locales", package, locale)):
+            locale_package = locale + ".yaml"
+        elif os.path.isfile(os.path.join("locales", package, "en")):
+            locale_package = "en.yaml"
+        else:
+            files = os.listdir(os.path.join("locales", package))
+            if files:
+                locale_package = files[0]
+            else:
+                continue
+        with open(os.path.join("locales", package, locale_package), encoding="UTF8") as yaml_file:
+            locales[package] = yaml.safe_load(yaml_file)
+    return locales
 
 def output_path(foodcoop, configuration):
     return os.path.join("output", foodcoop, configuration)

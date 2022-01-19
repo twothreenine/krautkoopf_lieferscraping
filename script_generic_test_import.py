@@ -17,14 +17,14 @@ def config_variables(): # List of the special config variables this script uses,
         # Not used here, but useful for detecting manual changes done in Foodsoft:
         # base.Variable(name="Foodsoft supplier ID", required=False, example=12),
         # base.Variable(name="last imported run", required=False),
-        base.Variable(name="Test-Variable", required=False, example=43),
-        base.Variable(name="Test-Variable 2", required=True, example=[34, 92]) # Not actually used, only for testing
+        base.Variable(name="test variable", required=False, example=43),
+        base.Variable(name="test variable 2", required=True, example=[34, 92], description="Not actually used, only for testing")
         ]
 
 def environment_variables(): # List of the special environment variables this script uses, whether they are required and how they could look like
     return [
         # base.Variable(name="LS_FOODSOFT_URL", required=False, example="https://app.foodcoops.at/coop_xy/"),
-        # base.Variable(name="LS_FOODSOFT_URL", required=False, example="name@foobar.com"),
+        # base.Variable(name="LS_FOODSOFT_USER", required=False, example="name@foobar.com"),
         # base.Variable(name="LS_FOODSOFT_PASS", required=False, example="asdf1234")
         ]
 

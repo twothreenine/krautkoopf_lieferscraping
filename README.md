@@ -14,7 +14,9 @@ bottle v0.12+
 
 dill
 
-selenium
+pyYAML
+
+selenium (for Fairfood script)
 
 ## Environment variables
 For some optional features, the following enviroment variables need to be set:

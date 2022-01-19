@@ -27,7 +27,7 @@ def config_variables(): # List of the special config variables this script uses,
 def environment_variables(): # List of the special environment variables this script uses, whether they are required and how they could look like
     return [
         base.Variable(name="LS_FOODSOFT_URL", required=False, example="https://app.foodcoops.at/coop_xy/"),
-        base.Variable(name="LS_FOODSOFT_URL", required=False, example="name@foobar.com"),
+        base.Variable(name="LS_FOODSOFT_USER", required=False, example="name@foobar.com"),
         base.Variable(name="LS_FOODSOFT_PASS", required=False, example="asdf1234")
         ]
 
