@@ -5,7 +5,7 @@ aktuell:
 - Webinterface
 	- Inputs auf Skript-ausführen-Seite
 	- Run.started_by in Liste an actions bzw. protocol migrieren (action (-> locales), done_by, date)
-	- Verzeichnisse ändern: output -> data, ggf. <run>/uploaded
+	- hochgeladene Dateien in <run>/uploaded speichern
 
 	- Bug mit Permission Error bei Umbenennen einer Konfiguration (Ordner) fixen? --> vorerst disabled
 	- Config-Kategorien (ausklappbar auf Startseite der Foodcoop)

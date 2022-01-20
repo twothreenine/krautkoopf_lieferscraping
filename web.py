@@ -125,7 +125,7 @@ def import_script(configuration):
     return script
 
 def run_path(configuration, run_name):
-    return os.path.join("output", foodcoop, configuration, run_name)
+    return os.path.join("data", foodcoop, configuration, run_name)
 
 def list_files(path, folder="download"):
     files = []
@@ -168,7 +168,7 @@ def all_download_buttons(configuration, run_name):
     if len(files) > 1:
         content += bottle.template('templates/download_button.tpl', source=zip_download(configuration, run_name), value="⤓ ZIP", affix="", foodcoop=foodcoop, configuration=configuration, run_name=run_name)
     for file in files:
-        source = "/download/output/" + foodcoop + "/" + configuration + "/" + run_name + "/download/" + file
+        source = "/download/data/" + foodcoop + "/" + configuration + "/" + run_name + "/download/" + file
         content += bottle.template('templates/download_button.tpl', source=source, value="⤓ " + file, affix="", foodcoop=foodcoop, configuration=configuration, run_name=run_name)
     return content
 

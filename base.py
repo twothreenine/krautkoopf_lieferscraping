@@ -215,7 +215,7 @@ def read_locales(foodcoop, locale=None):
     return locales
 
 def output_path(foodcoop, configuration):
-    return os.path.join("output", foodcoop, configuration)
+    return os.path.join("data", foodcoop, configuration)
 
 def get_outputs(foodcoop, configuration):
     path = output_path(foodcoop, configuration)
@@ -247,7 +247,7 @@ def list_categories(categories):
     return txt
 
 def prepare_output(foodcoop, configuration, name=""):
-    path = "output"
+    path = "data"
     os.makedirs(path, exist_ok=True)
     path = os.path.join(path, foodcoop)
     os.makedirs(path, exist_ok=True)
