@@ -101,6 +101,7 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notificati
     if foodsoft_url and foodsoft_user and foodsoft_password and supplier_id:
         fsc = foodsoft.FSConnector(url=foodsoft_url, supplier_id=supplier_id, user=foodsoft_user, password=foodsoft_password)
         csv_from_foodsoft = csv.reader(fsc.get_articles_CSV().splitlines(), delimiter=';')
+        fsc.logout()
         articles_from_foodsoft = foodsoft_article.read_articles_from_csv(csv_from_foodsoft)
     else:
         articles_from_foodsoft = []
