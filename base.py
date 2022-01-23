@@ -10,12 +10,18 @@ class Run:
     """
     An instance of a script execution.
     """
-    def __init__(self, foodcoop, configuration, started_by, name="", next_possible_methods=[]):
+    def __init__(self, foodcoop, configuration, log=None, name="", next_possible_methods=None):
         self.path, self.name = prepare_output(foodcoop=foodcoop, configuration=configuration, name=name)
         self.foodcoop = foodcoop
         self.configuration = configuration
-        self.started_by = started_by
-        self.next_possible_methods = next_possible_methods
+        if log:
+            self.log = log
+        else:
+            self.log = []
+        if next_possible_methods:
+            self.next_possible_methods = next_possible_methods
+        else:
+            self.next_possible_methods = []
         self.completion_percentage = 0
 
     def save(self):
@@ -34,9 +40,21 @@ class ScriptMethod:
     Create ScriptMethod instances for all methods which should be callable by the user at some point,
     and put them into next_possible_methods at the end of a method after which they should be callable.
     """
-    def __init__(self, name, inputs=[]):
+    def __init__(self, name, inputs=None):
         self.name = name
-        self.inputs = inputs
+        if inputs:
+            self.inputs = inputs
+        else:
+            self.inputs = []
+
+class LogEntry:
+    """
+    An entry of a run's log: What has been done by whom at what date and time.
+    """
+    def __init__(self, action, done_by=""):
+        self.action = action
+        self.done_by = done_by
+        self.datetime = datetime.datetime.now()
 
 class Variable:
     """
@@ -52,21 +70,28 @@ class Input:
     """
     A variable for a script which has to be entered anew each time.
     """
-    def __init__(self, name, required=False, accepted_file_types=[], example=None, description=""):
+    def __init__(self, name, required=False, input_format="", accepted_file_types=None, example=None, description=""):
         self.name = name
         self.required = required
-        self.accepted_file_types = accepted_file_types # for example ["csv"], or [] if not a file
-        self.example = example # important (if not a file) to know which type of input should be asked for
+        self.input_format = input_format # "" (auto), "textarea", "file", "files"; and html input types like "text", "number", ...
+        if accepted_file_types:
+            self.accepted_file_types = accepted_file_types # for example [".csv"], or [] for all
+        else:
+            self.accepted_file_types = []
+        self.example = example # if not a file
         self.description = description
 
 class Category:
     """
     Nestable categories e.g. for articles, for usage within a script.
     """
-    def __init__(self, number, name="", subcategories=[]):
+    def __init__(self, number, name="", subcategories=None):
         self.number = number
         self.name = name
-        self.subcategories = subcategories
+        if subcategories:
+            self.subcategories = subcategories
+        else:
+            self.subcategories = []
 
 def remove_double_strings_loop(text, string, description=None, number_of_runs=100):
     loop_count = 0

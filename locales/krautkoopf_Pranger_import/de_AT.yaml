@@ -10,6 +10,10 @@ articles to ignore:
 message prefix:
     name: "Text, der der Zusammenfassung vorangestellt wird"
 
+# log
+executed: "ausgeführt"
+marked_as_imported: "als hochgeladen markiert"
+
 # methods
 generate_csv:
     name: "CSV generieren"
@@ -17,3 +21,7 @@ generate_csv:
 set_as_imported:
     name: "Als hochgeladen markieren"
     description: "Hiermit wird diese CSV als zuletzt hochgeladene Artikelliste markiert. Dies ist wichtig beim nächsten Auslesen, damit manuelle Änderungen in der Foodsoft beim Import bzw. danach erkannt werden können. Wenn die Datei nicht hochgeladen wird, diesen Schritt also auslassen!"
+
+# inputs
+initials:
+    name: "Bitte gib dein Namenskürzel ein"

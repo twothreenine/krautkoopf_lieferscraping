@@ -5,12 +5,14 @@ import numbers
 import json
 import importlib
 from zipfile import ZipFile
+import babel.dates
 
 import base
 import foodsoft
 
 foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = foodsoft.read_foodsoft_config()
 settings = base.read_settings(foodcoop)
+locale = base.read_settings(foodcoop)["default_locale"]
 locales = base.read_locales(foodcoop)
 # username = foodcoop.capitalize() + "-Mitglied" # placeholder for user
 username = locales["base"]["member"].format(foodcoop=foodcoop.capitalize()) # placeholder for user
@@ -26,7 +28,7 @@ messages = []
 #         string = term
 #     return string
 
-def get_locale_string(term, script_name, substring=""):
+def get_locale_string(term, script_name, substring="", enforce_return=False):
     if term in locales[script_name] and substring in locales[script_name][term]:
         if substring:
             string = locales[script_name][term][substring]
@@ -41,8 +43,10 @@ def get_locale_string(term, script_name, substring=""):
         string = locales[script_name][term]
     elif substring == "name" and term in locales["base"]:
         string = locales["base"][term]
-    else:
+    elif enforce_return:
         string = term
+    else:
+        string = ""
     return string
 
 def read_messages():
@@ -186,13 +190,60 @@ def display(path, display_type="display"):
             display_content += bottle.template('templates/{}_content.tpl'.format(display_type), title=title, content=content)
     return display_content
 
+def add_input_field(ipt, script_name, input_content):
+    if input_content:
+        input_content += "<br/>"
+
+    field_type = "input"
+    input_type = ""
+    input_attributes = ""
+    file_types = ",".join(ipt.accepted_file_types)
+
+    if not ipt.input_format:
+        if ipt.example:
+            if isinstance(ipt.example, numbers.Number):
+                input_type = "type='number'"
+            elif len(str(ipt.example)) > 20:
+                field_type = "textarea"
+        elif ipt.accepted_file_types:
+            input_type = "type='file'"
+            input_attributes = f"accept='{file_types}'"
+    elif ipt.input_format == "textarea":
+        field_type = "textarea"
+    elif ipt.input_format == "file" or ipt.input_format == "files":
+        input_type = "type='file'"
+        if ipt.accepted_file_types:
+            input_attributes = f"accept='{file_types}'"
+        if ipt.input_format == "files":
+            input_attributes += " multiple"
+    else:
+        input_type = f"type='{ipt.input_format}'"
+
+    placeholder = ""
+    if ipt.example:
+        placeholder = f"placeholder='{ipt.example}'"
+
+    required = ""
+    if ipt.required:
+        required = "required"
+
+    description = get_locale_string(term=str(ipt.name), substring='description', script_name=script_name)
+    if description:
+        description = f" ({description})"
+
+    input_content += f"<label>{get_locale_string(term=str(ipt.name), substring='name', script_name=script_name, enforce_return=True)}: "
+    input_content += f"<{field_type} {input_type} name='{ipt.name}' {placeholder} {required} {input_attributes}></{field_type}>"
+    input_content += f"</label>{description}"
+
+    return input_content
+
 def add_config_variable_field(detail, config, config_variables, special_variables, script_name, config_content=""):
     if config_content:
         config_content += "<br/>"
     if str(detail) == "manual changes":
         config_content += locales["base"]["manual changes"].format(str(len(config[detail])))
     else:
-        config_content += f"<label>{get_locale_string(term=str(detail), substring='name', script_name=script_name)}: "
+        config_content += f"<label>{get_locale_string(term=str(detail), substring='name', script_name=script_name, enforce_return=True)}: "
         input_type = "input"
         placeholder = ""
         required = ""
@@ -209,8 +260,9 @@ def add_config_variable_field(detail, config, config_variables, special_variable
             if variable.example:
                 placeholder = "placeholder='" + str(variable.example) + "'"
                 example = variable.example
-            if variable.description:
-                description = f" ({get_locale_string(term=str(detail), substring='description', script_name=script_name)})"
+            description = get_locale_string(term=str(detail), substring='description', script_name=script_name)
+            if description:
+                description = f" ({description})"
 
         # determine input type
         if isinstance(example, numbers.Number):
@@ -340,7 +392,7 @@ def configuration_page(configuration):
         if str(detail) == "manual changes":
             config_content += locales["base"]["manual changes"].format(str(len(config[detail])))
         else:
-            config_content += get_locale_string(term=str(detail), substring='name', script_name=script_name) + ": " + str(config[detail])
+            config_content += get_locale_string(term=str(detail), substring='name', script_name=script_name, enforce_return=True) + ": " + str(config[detail])
     environment_variables = script.environment_variables()
     for variable in environment_variables:
         if config_content:
@@ -357,15 +409,30 @@ def configuration_page(configuration):
 def run_page(configuration, script, run):
     downloads = all_download_buttons(configuration, run.name)
     script_name = base.read_in_config(base.read_config(foodcoop, configuration), "Script name")
+
+    log_entries = []
+    for entry in run.log:
+        entry_string = get_locale_string(term=entry.action, script_name=script_name, enforce_return=True)
+        if entry.done_by:
+            entry_string += f" von {entry.done_by}"
+        entry_string += f" am {babel.dates.format_datetime(datetime=entry.datetime, format='short', locale=locale)}"
+        log_entries.append(entry_string)
+    log_text = ", ".join(log_entries)
+    if log_text:
+        log_text = log_text[0].upper() + log_text[1:]
+        log_text += "."
+
     continue_content = ""
     for option in run.next_possible_methods:
-        inputs = ""
         option_locales = locales[script_name][option.name]
+        inputs = ""
+        for ipt in option.inputs:
+            inputs = add_input_field(ipt=ipt, script_name=script_name, input_content=inputs)
         continue_content += bottle.template('templates/continue_option.tpl', fc=foodcoop, configuration=configuration, run_name=run.name, option_name=option.name, option_locales=option_locales, inputs=inputs)
     display_content = ""
     display_content += display(path=run.path, display_type="display")
     display_content += display(path=run.path, display_type="details")
-    return bottle.template('templates/run.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, run=run, started_by=run.started_by, completion_percentage=run.completion_percentage, downloads=downloads, continue_content=continue_content, display_content=display_content)
+    return bottle.template('templates/run.tpl', messages=read_messages(), fc=foodcoop, foodcoop=foodcoop.capitalize(), configuration=configuration, run=run, log_text=log_text, completion_percentage=run.completion_percentage, downloads=downloads, continue_content=continue_content, display_content=display_content)
 
 def edit_configuration_page(configuration):
     config_content = ""
@@ -484,8 +551,28 @@ def display_run(fc, configuration, run_name):
         run = script.ScriptRun.load(path=path)
         if "method" in submitted_form:
             method = submitted_form.get('method')
+            parameters = {}
+            # script_method = getattr(script, method)
+            script_method = [sm for sm in run.next_possible_methods if sm.name == method][0]
+            if script_method.inputs:
+                for ipt in script_method.inputs:
+                    value = None
+                    if ipt.input_format == "files":
+                        files = bottle.request.files.getall(ipt.name)
+                        for f in files:
+                            print(f.content_type) # TODO: check if mime type matches accepted file types
+                        value = [f.file for f in files]
+                    elif ipt.accepted_file_types or ipt.input_format == "file":
+                        file_object = bottle.request.files.get(ipt.name)
+                         # TODO: check if mime type matches accepted file types
+                        if file_object:
+                            value = file_object.file
+                    else:
+                        value = submitted_form.get(ipt.name)
+                    if value:
+                        parameters[ipt.name] = value
             func = getattr(run, method)
-            func()
+            func(**parameters)
             run.save()
             script_name = base.read_in_config(base.read_config(fc, configuration), "Script name")
             messages.append(locales[script_name][method]["name"] + " wurde ausgeführt.")
@@ -498,7 +585,7 @@ def start_script_run(fc, configuration):
     submitted_form = bottle.request.forms
     if check_login(submitted_form):
         script = import_script(configuration=configuration)
-        run = script.ScriptRun(foodcoop=foodcoop, configuration=configuration, started_by=username)
+        run = script.ScriptRun(foodcoop=foodcoop, configuration=configuration)
         run.save()
         return run_page(configuration, script, run)
     else:

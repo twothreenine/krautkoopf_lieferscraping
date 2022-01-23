@@ -5,6 +5,10 @@ test variable 2:
     name: Test-Variable 2
     description: nicht wirklich verwendet, nur zur Demonstration
 
+# log
+started: "gestartet"
+executed: "ausgeführt"
+
 # methods
 run_script:
     name: "Skript durchlaufen"
@@ -12,3 +16,10 @@ run_script:
 finish:
     name: "Ausführung abschließen"
     description: "Hiermit der Fortschrittsbalken dieser Ausführung auf 100% gesetzt und keine weiteren Optionen angeboten. Dies ist nur zur Veranschaulichung, dass Skripte aus mehreren Methoden bestehen können, die einzeln aufgerufen werden können."
+
+# inputs
+test_input:
+    name: "Test-Input"
+test_file_input:
+    name: "Test-Dateiinput"
+    description: "hier kann eine Textdatei hochgeladen werden"

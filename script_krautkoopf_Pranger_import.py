@@ -8,11 +8,11 @@ import foodsoft_article
 import foodsoft_article_import
 
 # Inputs this script's methods take
-# no inputs taken
+initials = base.Input(name="initials", required=True, example="dein Namenskürzel")
 
 # Executable script methods
-generate_csv = base.ScriptMethod(name="generate_csv")
-set_as_imported = base.ScriptMethod(name="set_as_imported")
+generate_csv = base.ScriptMethod(name="generate_csv", inputs=[initials])
+set_as_imported = base.ScriptMethod(name="set_as_imported", inputs=[initials])
 
 def config_variables(): # List of the special config variables this script uses, whether they are required and how they could look like
     return [
@@ -32,11 +32,11 @@ def environment_variables(): # List of the special environment variables this sc
         ]
 
 class ScriptRun(base.Run):
-    def __init__(self, foodcoop, configuration, started_by):
-        super().__init__(foodcoop=foodcoop, configuration=configuration, started_by=started_by)
+    def __init__(self, foodcoop, configuration):
+        super().__init__(foodcoop=foodcoop, configuration=configuration)
         self.next_possible_methods = [generate_csv]
 
-    def generate_csv(self):
+    def generate_csv(self, initials):
         config = base.read_config(self.foodcoop, self.configuration)
         supplier_id = base.read_in_config(config, "Foodsoft supplier ID", None)
         categories_to_ignore = base.read_in_config(config, "categories to ignore", [])
@@ -65,12 +65,14 @@ class ScriptRun(base.Run):
         message = foodsoft_article_import.compose_articles_csv_message(supplier=self.configuration, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications, prefix=message_prefix)
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Zusammenfassung"), content=message)
 
+        self.log.append(base.LogEntry(action="executed", done_by=initials))
         self.next_possible_methods = [set_as_imported]
         self.completion_percentage = 80
 
-    def set_as_imported(self):
+    def set_as_imported(self, initials):
         base.set_configuration_detail(foodcoop=self.foodcoop, configuration=self.configuration, detail="last imported run", value=self.name)
 
+        self.log.append(base.LogEntry(action="marked_as_imported", done_by=initials))
         self.next_possible_methods = []
         self.completion_percentage = 100
 
@@ -311,8 +313,8 @@ def getArticles(category, articles, ignored_articles, articles_to_ignore):
 if __name__ == "__main__":
     importlib.invalidate_caches()
     script = importlib.import_module("script_krautkoopf_Pranger_import") # I don't know why we have to do this, but if the ScriptRun object is just initialized directly (run = ScriptRun(...)), then it doesn't load when we try to load in web ("AttributeError: Can't get attribute 'ScriptRun' on <module '__main__' from 'web.py'>")
-    run = script.ScriptRun(foodcoop="krautkoopf", configuration="Biohof Pranger", started_by="Konsole")
+    run = script.ScriptRun(foodcoop="krautkoopf", configuration="Biohof Pranger")
     while run.next_possible_methods:
         func = getattr(run, run.next_possible_methods[0].name)
-        func()
+        func(initials="Konsole")
     run.save()

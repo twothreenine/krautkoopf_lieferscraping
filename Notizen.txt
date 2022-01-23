@@ -3,15 +3,16 @@
 
 aktuell:
 - Webinterface
-	- Inputs auf Skript-ausführen-Seite
-	- Run.started_by in Liste an actions bzw. protocol migrieren (action (-> locales), done_by, date)
-	- hochgeladene Dateien in <run>/uploaded speichern
+	- hochgeladene Dateien in <run>/uploaded speichern?
 
 	- Bug mit Permission Error bei Umbenennen einer Konfiguration (Ordner) fixen? --> vorerst disabled
+	- settings & configurations umordnen:
+		settings.yaml unter data/<foodcoop>
+		configuration.yaml unter data/<foodcoop>/<configuration>
+		manual changes als extra yaml?
 	- Config-Kategorien (ausklappbar auf Startseite der Foodcoop)
 	- Einstellungen bearbeiten-Seite
-	- settings & configurations in eine Datei packen? (erst einzelne settings, dann configurations = {...} )
-	- Aufbau anpassen (u.a. Labels, geordneter)
+	- Aufbau anpassen (Labels und Inputs geordneter)
 	(- Option Skript in bestimmtem Turnus automatisch ausführen zu lassen, z.B. jeden Donnerstag um 6:00 Uhr)
 (- Ignore-Feature für Produzenten, Herkunft und Herkunft-startet-mit (z.B. PLZ 2...))
 - Locales

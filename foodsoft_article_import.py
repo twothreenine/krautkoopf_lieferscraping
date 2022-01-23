@@ -87,11 +87,14 @@ def compare_string(article, article_from_last_run, article_from_foodsoft, string
             setattr(article, string_type, manual_string)
     return article, configuration_config
 
-def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notifications=[], compare_name=True, compare_note=True, compare_manufacturer=True, compare_origin=True, compare_unit=True, compare_price=True, compare_vat=False, compare_deposit=False, compare_unit_quantity=False, compare_category=True):
+def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notifications=None, compare_name=True, compare_note=True, compare_manufacturer=True, compare_origin=True, compare_unit=True, compare_price=True, compare_vat=False, compare_deposit=False, compare_unit_quantity=False, compare_category=True):
     """
     This is an optional method which checks if article data has been modified manually in Foodsoft after the last CSV was created.
     In case the article data in the source did not change since the last run of the script and the article data from your Foodsoft instance differs, latter is adopted.
     """
+
+    if not notifications:
+        notifications = []
 
     # Extract the configuration for this supplier
     configuration_config = base.read_config(foodcoop=foodcoop, configuration=supplier, ensure_subconfig="manual changes")
@@ -241,7 +244,10 @@ def compose_articles_csv_message(supplier, supplier_id=None, categories=[], igno
             text += "\n- " + notification
     return text
 
-def write_articles_csv(file_path, articles, notifications=[]):
+def write_articles_csv(file_path, articles, notifications=None):
+    if not notifications:
+        notifications = []
+    
     rows, notifications = get_data_from_articles(articles=articles, notifications=notifications)
 
     with open(file_path + '.csv', 'w', encoding='UTF8', newline='') as f:

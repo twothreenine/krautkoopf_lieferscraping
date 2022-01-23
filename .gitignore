@@ -130,4 +130,6 @@ dmypy.json
 *.csv
 *.backup
 *.json
-output/
+data/
+config/
+Archiv/
