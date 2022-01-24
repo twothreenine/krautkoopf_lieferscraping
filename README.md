@@ -7,7 +7,7 @@ Scripts for specific suppliers read data from the supplier's webshop (screen-scr
 
 **web** produces a simple web user interface for managing configurations, running script methods, and downloading the generated CSV.
 
-**foodsoft** provides a connection with a Foodsoft instance via screen-scraping. (reused from twothreenine/task-rotation)
+**foodsoft** provides a connection to a Foodsoft instance via screen-scraping. (reused from [task-rotation](https://github.com/twothreenine/task-rotation))
 
 **foodsoft_article** offers a framework for dealing with articles in Foodsoft's model.
 
