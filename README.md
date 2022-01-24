@@ -1,20 +1,36 @@
 # krautkoopf_lieferscraping
 Automated import of supplier's articles to Foodsoft
 
-Scripts for specific suppliers get data from their webshop (screen-scraping), spreadsheet, etc. and transform it into a CSV which can be imported into Foodsoft. Foodsoft then compares existing articles of this supplier to the new list and shows a summary of changes, deleted articles, and new articles.
+Scripts for specific suppliers read data from the supplier's webshop (screen-scraping) or a spreadsheet etc. and transform it into a CSV which can be imported into Foodsoft. Foodsoft then compares existing articles of this supplier to the new list and shows a summary of changes, deleted articles, and new articles.
+
+**base** sets the framework for the "scripts" in general and their configurations. It is neither connected to articles nor Foodsoft, so you could also write scripts for entirely different purposes.
+
+**web** produces a simple web user interface for managing configurations, running script methods, and downloading the generated CSV.
+
+**foodsoft** provides a connection with a Foodsoft instance via screen-scraping. (reused from twothreenine/task-rotation)
+
+**foodsoft_article** offers a framework for dealing with articles in Foodsoft's model.
+
+**foodsoft_article_import** offers a number of functions that may be useful when preparing articles to be imported.
+
+**script_generic_test_import** is a sample which shows how a script can look like and demonstrates some of the features of the framework.
+
+As a naming convention, scripts should be named: script_*foodcoop_supplier_action*.py
 
 ## Requirements
 python v3.8+
+
+dill
+
+pyYAML
 
 beautifulsoup4
 
 requests v2.24+
 
-bottle v0.12+
+bottle v0.12+ (for web interface)
 
-dill
-
-pyYAML
+babel (for web interface)
 
 selenium (for Fairfood script)
 
@@ -41,7 +57,4 @@ Weitere Features:
 * Gleichnamige Artikel umbenennen nach einem Attribut, in dem sie sich unterscheiden (Einheit, Hersteller, Herkunft) - z.B. 2x „Weizenmehl“ → „Weizenmehl (500g)“ und „Weizenmehl (1kg)“, da die Foodsoft gleichnamige Artikel nicht akzeptiert
 * Überlange Artikel-Daten (die das jeweilige Zeichenlimit der Foodsoft überschreiten) kürzen
 
-Etwas Ähnliches wurde glaub ich schon mit den Shared Suppliers versucht. Dies ist nun aber dafür gedacht, dass jede Foodcoop individuell Artikel importiert.
-
-## Nächste Schritte
-Einfaches Webinterface erstellen, über das die jeweiligen Skripte (inkl. Parametern wie: welche Artikel ignoriert werden sollen) aufgerufen werden können.
+Etwas Ähnliches wurde glaub ich schon mit den Shared Suppliers (sharedlists) versucht. Dies ist nun aber dafür gedacht, dass jede Foodcoop individuell Artikel importiert.
