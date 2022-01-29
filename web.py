@@ -622,4 +622,4 @@ def send_css(filename='styles.css'):
     return bottle.static_file(filename, root="templates")
 
 if __name__ == "__main__":
-    bottle.run(host='localhost', port=8080, debug=True, reloader=True)
+    bottle.run(host='0.0.0.0', port=8080, debug=True, reloader=True)
