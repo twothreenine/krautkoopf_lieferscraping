@@ -70,7 +70,7 @@ class ScriptRun(base.Run):
         self.completion_percentage = 80
 
     def set_as_imported(self, initials):
-        base.set_configuration_detail(foodcoop=self.foodcoop, configuration=self.configuration, detail="last imported run", value=self.name)
+        base.set_config_detail(foodcoop=self.foodcoop, configuration=self.configuration, detail="last imported run", value=self.name)
 
         self.log.append(base.LogEntry(action="marked_as_imported", done_by=initials))
         self.next_possible_methods = []
@@ -206,7 +206,7 @@ def getArticles(category, articles, ignored_articles, articles_to_ignore):
             if [x for x in articles if x.order_number == order_number]:
                 continue
             title = item.find(class_="font2 ic3 itemname").text.replace("Bio-", "").replace(" Pkg.", "").replace(" PKG.", "").replace(" Pkg", "").replace(" PKG", "").replace(" Stk.", "").replace(" Bd.", "").replace(" Str.", "").replace(" Fl.", "").replace(" kg", "").replace(" Glas", "").replace(" Dose", "").strip()
-            title_contents = re.split("(.+)\s(\d.?\d*.?\S+)\s?([a-zA-Z]*)", title)
+            title_contents = re.split(r"(.+)\s(\d.?\d*.?\S+)\s?([a-zA-Z]*)", title)
             if len(title_contents) > 1:
                 name = title_contents[1]
                 if title_contents[3]:
@@ -240,7 +240,7 @@ def getArticles(category, articles, ignored_articles, articles_to_ignore):
                 if len(title_contents) > 1:
                     unit_info = title_contents[2]
                 elif note:
-                    unit_in_note = re.split("([c]?[a]?[.]?[ ]?\d+[.,]?\d*[a-zA-Z]+)", note)
+                    unit_in_note = re.split(r"([c]?[a]?[.]?[ ]?\d+[.,]?\d*[a-zA-Z]+)", note)
                     if len(unit_in_note) > 1:
                         unit_info = unit_in_note[1]
                         note = note.replace(unit_in_note[1], "").strip()

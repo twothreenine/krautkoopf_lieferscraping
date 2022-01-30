@@ -3,15 +3,18 @@
 
 aktuell:
 - Webinterface
+	- Root-Seite ohne ausgewählte Foodcoop
+	- Neue Login-Seite
+
+	- "Foodcoop" in "Instance" oder "Usergroup" umbenennen?
+
+	- Einstellungen bearbeiten-Seite
+	- Config-Kategorien (ausklappbar? auf Startseite der Foodcoop)
+
+	- manual changes als extra yaml, oder als csv?
 	- hochgeladene Dateien in <run>/uploaded speichern?
 
 	- Bug mit Permission Error bei Umbenennen einer Konfiguration (Ordner) fixen? --> vorerst disabled
-	- settings & configurations umordnen:
-		settings.yaml unter data/<foodcoop>
-		configuration.yaml unter data/<foodcoop>/<configuration>
-		manual changes als extra yaml?
-	- Config-Kategorien (ausklappbar auf Startseite der Foodcoop)
-	- Einstellungen bearbeiten-Seite
 	- Aufbau anpassen (Labels und Inputs geordneter)
 	(- Option Skript in bestimmtem Turnus automatisch ausführen zu lassen, z.B. jeden Donnerstag um 6:00 Uhr)
 (- Ignore-Feature für Produzenten, Herkunft und Herkunft-startet-mit (z.B. PLZ 2...))
@@ -22,3 +25,7 @@ aktuell:
 Ideen für Tools mit ähnlichem (eigenen) Web-Interface:
 - Taskrotation
 - Kerndlflows-Tools mit Python-Matrix-Anbindung
+
+Deployment:
+- Commits in foodcoopsat-Repo übertragen
+- data hochladen?

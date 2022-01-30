@@ -97,7 +97,9 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notificati
         notifications = []
 
     # Extract the configuration for this supplier
-    configuration_config = base.read_config(foodcoop=foodcoop, configuration=supplier, ensure_subconfig="manual changes")
+    configuration_config = base.read_config(foodcoop=foodcoop, configuration=supplier)
+    if "manual changes" not in configuration_config:
+        configuration_config["manual changes"] = {}
     foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = foodsoft.read_foodsoft_config()
 
     # Connect to your Foodsoft instance and download the articles CSV of the supplier
@@ -164,7 +166,7 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notificati
                 configuration_config["manual changes"][article.order_number]["category"] = article_from_foodsoft.category
                 article.category = article_from_foodsoft.category
 
-    base.save_configuration(foodcoop=foodcoop, configuration=supplier, new_config=configuration_config)
+    base.save_config(foodcoop=foodcoop, configuration=supplier, config=configuration_config)
 
     return articles, notifications
 

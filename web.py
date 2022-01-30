@@ -12,7 +12,7 @@ import foodsoft
 
 foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = foodsoft.read_foodsoft_config()
 settings = base.read_settings(foodcoop)
-locale = base.read_settings(foodcoop)["default_locale"]
+locale = settings["default_locale"]
 locales = base.read_locales(foodcoop)
 # username = foodcoop.capitalize() + "-Mitglied" # placeholder for user
 username = locales["base"]["member"].format(foodcoop=foodcoop.capitalize()) # placeholder for user
@@ -77,7 +77,7 @@ def check_login(submitted_form):
         return None
 
 def convert_urls_to_links(text):
-    urls = re.findall("http\S*", text)
+    urls = re.findall(r"http\S*", text)
     for url in urls:
         if "'" in url or "</a>" in url:
             continue
@@ -285,18 +285,17 @@ def add_config_variable_field(detail, config, config_variables, special_variable
     return config_content
 
 def add_configuration(submitted_form):
-    new_config_name = submitted_form.get('new config name')
-    config = base.read_config(foodcoop=foodcoop)
-    if new_config_name in config:
-        messages.append("Es existiert bereits eine Konfiguration namens " + new_config_name + " für " + foodcoop.capitalize() + ". Bitte wähle einen anderen Namen.")
+    new_configuration_name = submitted_form.get('new configuration name')
+    if new_configuration_name in base.find_configurations(foodcoop=foodcoop):
+        messages.append("Es existiert bereits eine Konfiguration namens " + new_configuration_name + " für " + foodcoop.capitalize() + ". Bitte wähle einen anderen Namen.")
         return new_configuration_page()
     else:
-        base.save_configuration(foodcoop=foodcoop, configuration=new_config_name, new_config={"Script name": submitted_form.get('script name')})
+        base.save_config(foodcoop=foodcoop, configuration=new_configuration_name, config={"Script name": submitted_form.get('script name')})
         messages.append("Konfiguration angelegt.")
-        script = import_script(configuration=new_config_name)
+        script = import_script(configuration=new_configuration_name)
         config_variables = script.config_variables()
         if config_variables:
-            return edit_configuration_page(configuration=new_config_name)
+            return edit_configuration_page(configuration=new_configuration_name)
         else:
             return main_page()
 
@@ -322,7 +321,7 @@ def save_configuration_edit(configuration, submitted_form):
             config[name] = value
         elif name in config:
             config.pop(name)
-    base.save_configuration(foodcoop=foodcoop, configuration=configuration, new_config=config)
+    base.save_config(foodcoop=foodcoop, configuration=configuration, config=config)
     # TODO: Renaming a configuration sometimes leads to PermissionError: [WinError 5], therefore the input field is disabled for now
     # configuration_name = submitted_form.get('configuration name')
     # if configuration_name != configuration:
@@ -335,26 +334,21 @@ def save_configuration_edit(configuration, submitted_form):
 
 def del_configuration(submitted_form):
     configuration_to_delete = submitted_form.get('delete configuration')
-    deleted_configuration = base.delete_configuration(foodcoop, configuration_to_delete)
-    if deleted_configuration:
+    success, feedback = base.delete_configuration(foodcoop, configuration_to_delete)
+    if success:
         messages.append(configuration_to_delete + " erfolgreich gelöscht.")
+    elif feedback:
+        messages.append(feedback)
     else:
         messages.append("Löschen von " + configuration_to_delete + " fehlgeschlagen: Konfiguration scheint nicht zu existieren.")
     return main_page()
 
 def main_page():
     content = ""
-    config = base.read_config(foodcoop=foodcoop)
-    configurations = [x for x in config]
-    if configurations:
-        content += configuration_link(configurations[0])
-        if "note" in configurations[0]:
-            content += " (" + configurations[0]["note"] + ")"
-    if len(configurations) > 1:
-        for configuration in configurations[1:]:
-            content += "<br/>" + configuration_link(configuration)
-            if "note" in configuration:
-                content += " (" + configuration["note"] + ")"
+    for configuration in base.find_configurations(foodcoop=foodcoop):
+        if content:
+            content += "<br/>"
+        content += configuration_link(configuration)
 
     return bottle.template('templates/main.tpl', messages=read_messages(), base_locales=locales["base"], fc=foodcoop, foodcoop=foodcoop.capitalize(), configurations=content)
 
@@ -516,7 +510,7 @@ def do_main(fc):
     if check_login(submitted_form):
         if 'new configuration' in submitted_form:
             return new_configuration_page()
-        elif 'new config name' in submitted_form:
+        elif 'new configuration name' in submitted_form:
             return add_configuration(submitted_form)
         elif 'delete configuration' in submitted_form:
             return del_configuration(submitted_form)
