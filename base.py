@@ -1,6 +1,5 @@
 import os
 import shutil
-import json
 import yaml
 import datetime
 import dill
@@ -92,6 +91,17 @@ class Category:
         else:
             self.subcategories = []
 
+def equal_strings_check(list1, list2):
+    # compares strings of two lists case-insensitively for matches
+    matches = False
+    compare_list1 = [string.casefold().strip() for string in list1]
+    compare_list2 = [string.casefold().strip() for string in list2]
+    for string in compare_list1:
+        if string in compare_list2:
+            matches = True
+            break
+    return matches
+
 def remove_double_strings_loop(text, string, description=None, number_of_runs=100):
     loop_count = 0
     while string+string in text:
@@ -104,6 +114,19 @@ def remove_double_strings_loop(text, string, description=None, number_of_runs=10
             print(text)
             break
     return text
+
+def find_available_locales():
+    available_locales = []
+    for package in os.listdir("locales"):
+        package_path = os.path.join("locales", package)
+        if not os.path.isdir(package_path):
+            continue
+        for file in [f for f in os.listdir(package_path) if os.path.isfile(os.path.join(package_path, f))]:
+            if file.endswith(".yaml"):
+                locale = file.replace(".yaml", "")
+                if locale not in available_locales:
+                    available_locales.append(locale)
+    return available_locales
 
 def find_instances():
     root_path = "data"
@@ -290,3 +313,10 @@ def file_path(path, folder, file_name):
 def write_txt(file_path, content):
     with open(file_path + ".txt", "w", encoding="UTF8") as f:
         f.write(content)
+
+def full_user_name(session):
+    # Return full name of session user
+    if session.foodsoft_connector:
+        return " ".join([session.foodsoft_connector.first_name, session.foodsoft_connector.last_name]).strip()
+    else: # TODO: check if session has automated task -> return task name (?)
+        return "Unbekannt"
