@@ -1,5 +1,5 @@
 import os
-import json
+import shutil
 import yaml
 import datetime
 import dill
@@ -91,6 +91,17 @@ class Category:
         else:
             self.subcategories = []
 
+def equal_strings_check(list1, list2):
+    # compares strings of two lists case-insensitively for matches
+    matches = False
+    compare_list1 = [string.casefold().strip() for string in list1]
+    compare_list2 = [string.casefold().strip() for string in list2]
+    for string in compare_list1:
+        if string in compare_list2:
+            matches = True
+            break
+    return matches
+
 def remove_double_strings_loop(text, string, description=None, number_of_runs=100):
     loop_count = 0
     while string+string in text:
@@ -104,25 +115,35 @@ def remove_double_strings_loop(text, string, description=None, number_of_runs=10
             break
     return text
 
-def read_config(foodcoop, configuration="", ensure_subconfig=""):
-    os.makedirs("config", exist_ok=True)
-    filename = "config/" + foodcoop + "_configurations.json"
+def find_available_locales():
+    available_locales = []
+    for package in os.listdir("locales"):
+        package_path = os.path.join("locales", package)
+        if not os.path.isdir(package_path):
+            continue
+        for file in [f for f in os.listdir(package_path) if os.path.isfile(os.path.join(package_path, f))]:
+            if file.endswith(".yaml"):
+                locale = file.replace(".yaml", "")
+                if locale not in available_locales:
+                    available_locales.append(locale)
+    return available_locales
+
+def find_instances():
+    root_path = "data"
+    return [d for d in os.listdir(root_path) if os.path.isfile(os.path.join(root_path, d, "settings.yaml"))]
+
+def find_configurations(foodcoop):
+    root_path = os.path.join("data", foodcoop)
+    return [d for d in os.listdir(root_path) if os.path.isdir(os.path.join(root_path, d))]
+
+def read_config(foodcoop, configuration):
+    filename = os.path.join("data", foodcoop, configuration, "config.yaml")
     if os.path.isfile(filename):
-        with open(filename, encoding="UTF8") as json_file:
-            config = json.load(json_file)
+        with open(filename) as yaml_file:
+            configuration = yaml.safe_load(yaml_file)
     else:
-        config = {}
-    if configuration:
-        if configuration not in config:
-            configuration_config = {}
-        else:
-            configuration_config = config[configuration]
-        if ensure_subconfig:
-            if ensure_subconfig not in configuration_config:
-                configuration_config[ensure_subconfig] = {}
-        return configuration_config
-    else:
-        return config
+        configuration = {}
+    return configuration
 
 def read_in_config(config, detail, alternative=None):
     if detail in config:
@@ -130,37 +151,25 @@ def read_in_config(config, detail, alternative=None):
     else:
         return alternative
 
-def save_config(foodcoop, config):
-    os.makedirs("config", exist_ok=True)
-    filename = "config/" + foodcoop + "_configurations.json"
-    with open(filename, "w", encoding="UTF8") as json_file:
-        json.dump(config, json_file, indent=4)
+def save_config(foodcoop, configuration, config):
+    config_path = os.path.join("data", foodcoop, configuration)
+    os.makedirs(config_path, exist_ok=True)
+    filename = os.path.join(config_path, "config.yaml")
+    with open(filename, "w") as yaml_file:
+        yaml.dump(config, yaml_file, allow_unicode=True, indent=4, sort_keys=False)
 
-def save_configuration(foodcoop, configuration, new_config):
-    config = read_config(foodcoop)
-    if configuration not in config:
-        config[configuration] = {}
-    config[configuration] = new_config
-    save_config(foodcoop, config)
-
-def set_configuration_detail(foodcoop, configuration, detail, value):
-    config = read_config(foodcoop)
-    if configuration not in config:
-        config[configuration] = {}
+def set_config_detail(foodcoop, configuration, detail, value):
+    config = read_config(foodcoop, configuration)
     config[configuration][detail] = value
-    save_config(foodcoop, config)
+    save_config(foodcoop, configuration, config)
 
 def rename_configuration(foodcoop, old_configuration_name, new_configuration_name):
-    config = read_config(foodcoop)
-    if old_configuration_name in config:
-        # set new configuration name in config file
-        config[new_configuration_name] = config.pop(old_configuration_name)
-        save_config(foodcoop, config)
-
+    configurations = find_configurations(foodcoop)
+    if old_configuration_name in configurations:
         # rename folder
         existing_output_path = output_path(foodcoop, old_configuration_name)
         new_output_path = output_path(foodcoop, new_configuration_name)
-        if os.path.exists(new_output_path):
+        if os.path.exists(new_output_path): # TODO: ask if user really wants to merge configurations and which config.yaml should be kept; then keep that config.yaml resp. overwrite it, instead of creating config.yaml*
             for entry in os.scandir(existing_output_path):
                 new_entry_name = entry.name
                 while os.path.exists(os.path.join(new_output_path, new_entry_name)):
@@ -182,21 +191,25 @@ def rename_configuration(foodcoop, old_configuration_name, new_configuration_nam
         return None
 
 def delete_configuration(foodcoop, configuration):
-    config = read_config(foodcoop)
-    deleted_configuration = config.pop(configuration, None)
-    save_config(foodcoop, config)
-    updated_config = read_config(foodcoop)
-    if deleted_configuration:
-        if deleted_configuration in updated_config.items():
-            deleted_configuration = None
-    return deleted_configuration
+    configuration_path = os.path.join("data", foodcoop, configuration)
+    success = None
+    feedback = None
+    if os.path.exists(configuration_path):
+        try:
+            shutil.rmtree(configuration_path)
+            success = True
+        except OSError as e:
+            success = False
+            feedback = f"Error: {configuration_path} : {e.strerror}"
+    return success, feedback
 
 def read_settings(foodcoop):
-    os.makedirs("config", exist_ok=True)
-    filename = "config/" + foodcoop + "_settings.json"
+    settings_path = os.path.join("data", foodcoop)
+    os.makedirs(settings_path, exist_ok=True)
+    filename = os.path.join(settings_path, "settings.yaml")
     if os.path.isfile(filename):
-        with open(filename, encoding="UTF8") as json_file:
-            settings = json.load(json_file)
+        with open(filename) as yaml_file:
+            settings = yaml.safe_load(yaml_file)
     else:
         settings = {
             "default_locale": "de_AT",
@@ -206,10 +219,11 @@ def read_settings(foodcoop):
     return settings
 
 def save_settings(foodcoop, settings):
-    os.makedirs("config", exist_ok=True)
-    filename = "config/" + foodcoop + "_settings.json"
-    with open(filename, "w", encoding="UTF8") as json_file:
-        json.dump(settings, json_file, indent=4)
+    settings_path = os.path.join("data", foodcoop)
+    os.makedirs(settings_path, exist_ok=True)
+    filename = os.path.join(settings_path, "settings.yaml")
+    with open(filename, "w") as yaml_file:
+        yaml.dump(settings, yaml_file, allow_unicode=True, indent=4, sort_keys=False)
 
 def set_setting(foodcoop, setting, value):
     settings = read_settings(foodcoop)
@@ -299,3 +313,10 @@ def file_path(path, folder, file_name):
 def write_txt(file_path, content):
     with open(file_path + ".txt", "w", encoding="UTF8") as f:
         f.write(content)
+
+def full_user_name(session):
+    # Return full name of session user
+    if session.foodsoft_connector:
+        return " ".join([session.foodsoft_connector.first_name, session.foodsoft_connector.last_name]).strip()
+    else: # TODO: check if session has automated task -> return task name (?)
+        return "Unbekannt"

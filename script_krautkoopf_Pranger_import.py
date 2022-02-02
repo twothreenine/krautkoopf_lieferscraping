@@ -8,11 +8,12 @@ import foodsoft_article
 import foodsoft_article_import
 
 # Inputs this script's methods take
-initials = base.Input(name="initials", required=True, example="dein Namenskürzel")
+# none
 
 # Executable script methods
-generate_csv = base.ScriptMethod(name="generate_csv", inputs=[initials])
-set_as_imported = base.ScriptMethod(name="set_as_imported", inputs=[initials])
+read_webshop = base.ScriptMethod(name="read_webshop")
+generate_csv = base.ScriptMethod(name="generate_csv")
+mark_as_imported = base.ScriptMethod(name="mark_as_imported")
 
 def config_variables(): # List of the special config variables this script uses, whether they are required and how they could look like
     return [
@@ -24,55 +25,55 @@ def config_variables(): # List of the special config variables this script uses,
         base.Variable(name="message prefix", required=False, example="Hallo")
         ]
 
-def environment_variables(): # List of the special environment variables this script uses, whether they are required and how they could look like
-    return [
-        base.Variable(name="LS_FOODSOFT_URL", required=False, example="https://app.foodcoops.at/coop_xy/"),
-        base.Variable(name="LS_FOODSOFT_USER", required=False, example="name@foobar.com"),
-        base.Variable(name="LS_FOODSOFT_PASS", required=False, example="asdf1234")
-        ]
-
 class ScriptRun(base.Run):
     def __init__(self, foodcoop, configuration):
         super().__init__(foodcoop=foodcoop, configuration=configuration)
-        self.next_possible_methods = [generate_csv]
+        self.next_possible_methods = [read_webshop]
 
-    def generate_csv(self, initials):
+    def read_webshop(self, session):
         config = base.read_config(self.foodcoop, self.configuration)
-        supplier_id = base.read_in_config(config, "Foodsoft supplier ID", None)
         categories_to_ignore = base.read_in_config(config, "categories to ignore", [])
         subcategories_to_ignore = base.read_in_config(config, "subcategories to ignore", [])
         articles_to_ignore = base.read_in_config(config, "articles to ignore", [])
-        articles = []
-        categories = []
-        ignored_articles = []
-        ignored_categories = []
-        ignored_subcategories = []
-        notifications = []
+        self.articles = []
+        self.categories = []
+        self.ignored_articles = []
+        self.ignored_categories = []
+        self.ignored_subcategories = []
 
         for cat_id in range(20):
-            subcats, categories, ignored_subcategories = getSubcategories(cat_id, categories, ignored_subcategories, categories_to_ignore, subcategories_to_ignore)
-            articles, ignored_articles = getArticles(subcats, articles, ignored_articles, articles_to_ignore)
+            subcats, self.categories, self.ignored_subcategories = get_subcategories(cat_id, self.categories, self.ignored_subcategories, categories_to_ignore, subcategories_to_ignore)
+            self.articles, self.ignored_articles = get_articles(subcats, self.articles, self.ignored_articles, articles_to_ignore)
 
         for cat_id in range(20):
-            cat, categories, ignored_categories = getCategory(cat_id, categories, ignored_categories, categories_to_ignore)
-            articles, ignored_articles = getArticles(cat, articles, ignored_articles, articles_to_ignore)
+            cat, self.categories, self.ignored_categories = get_category(cat_id, self.categories, self.ignored_categories, categories_to_ignore)
+            self.articles, self.ignored_articles = get_articles(cat, self.articles, self.ignored_articles, articles_to_ignore)
 
-        articles = foodsoft_article_import.remove_articles_to_ignore(articles)
-        articles = foodsoft_article_import.rename_duplicates(articles)
-        articles, notifications = foodsoft_article_import.compare_manual_changes(foodcoop=self.foodcoop, supplier=self.configuration, supplier_id=supplier_id, articles=articles, notifications=notifications)
-        notifications = foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=articles, notifications=notifications)
+        self.articles = foodsoft_article_import.remove_articles_to_ignore(self.articles)
+        self.articles = foodsoft_article_import.rename_duplicates(self.articles)
+
+        self.log.append(base.LogEntry(action="webshop read", done_by=base.full_user_name(session)))
+        self.next_possible_methods = [generate_csv]
+        self.completion_percentage = 33
+
+    def generate_csv(self, session):
+        self.notifications = []
+        config = base.read_config(self.foodcoop, self.configuration)
+        supplier_id = base.read_in_config(config, "Foodsoft supplier ID", None)
+        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(foodcoop=self.foodcoop, supplier=self.configuration, supplier_id=supplier_id, articles=self.articles, foodsoft_connector=session.foodsoft_connector, notifications=self.notifications)
+        self.notifications = foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
         message_prefix = base.read_in_config(config, "message prefix", "")
-        message = foodsoft_article_import.compose_articles_csv_message(supplier=self.configuration, supplier_id=supplier_id, categories=categories, ignored_categories=ignored_categories, ignored_subcategories=ignored_subcategories, ignored_articles=ignored_articles, notifications=notifications, prefix=message_prefix)
+        message = foodsoft_article_import.compose_articles_csv_message(supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_subcategories=self.ignored_subcategories, ignored_articles=self.ignored_articles, notifications=self.notifications, prefix=message_prefix)
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Zusammenfassung"), content=message)
 
-        self.log.append(base.LogEntry(action="executed", done_by=initials))
-        self.next_possible_methods = [set_as_imported]
-        self.completion_percentage = 80
+        self.log.append(base.LogEntry(action="CSV generated", done_by=base.full_user_name(session)))
+        self.next_possible_methods = [mark_as_imported]
+        self.completion_percentage = 67
 
-    def set_as_imported(self, initials):
-        base.set_configuration_detail(foodcoop=self.foodcoop, configuration=self.configuration, detail="last imported run", value=self.name)
+    def mark_as_imported(self, session):
+        base.set_config_detail(foodcoop=self.foodcoop, configuration=self.configuration, detail="last imported run", value=self.name)
 
-        self.log.append(base.LogEntry(action="marked_as_imported", done_by=initials))
+        self.log.append(base.LogEntry(action="marked as imported", done_by=base.full_user_name(session)))
         self.next_possible_methods = []
         self.completion_percentage = 100
 
@@ -81,7 +82,7 @@ class PriceOption:
         self.price = price
         self.unit = unit
 
-def getSubcategories(cat_id, categories, ignored_subcategories, categories_to_ignore, subcategories_to_ignore):
+def get_subcategories(cat_id, categories, ignored_subcategories, categories_to_ignore, subcategories_to_ignore):
     subcats = []
     print('sg'+str(cat_id))
     category = base.Category(number=cat_id)
@@ -108,7 +109,7 @@ def getSubcategories(cat_id, categories, ignored_subcategories, categories_to_ig
         categories.append(category)
     return subcats, categories, ignored_subcategories
 
-def getCategory(cat_id, categories, ignored_categories, categories_to_ignore):
+def get_category(cat_id, categories, ignored_categories, categories_to_ignore):
     parsed_html = BeautifulSoup(requests.get("https://oekobox-online.eu/v3/shop/pranger/s2/C6.0.219C/category.jsp?categoryid="+str(cat_id)+"&cartredir=1").text, features="html.parser")
     name = parsed_html.body.find(class_="font2 ic2").get_text().strip()
     existing_categories = [x for x in categories if x.number == cat_id]
@@ -127,14 +128,14 @@ def getCategory(cat_id, categories, ignored_categories, categories_to_ignore):
         cat = [{"name" : name, "number" : str(cat_id), "items" : table, "ignore" : False}]
     return cat, categories, ignored_categories
 
-def getIfFound(src, class_name):
+def get_if_found(src, class_name):
     item = src.find(class_=class_name)
     text = ""
     if item and item.get_text().strip() != "" : 
         text = item.get_text().strip()
     return text
 
-def matchCategories(name, note, category_number, cat_name):
+def match_categories(name, note, category_number, cat_name):
     final_cat_name = None
     if category_number == "s51":
         if "zucker" in name:
@@ -191,7 +192,7 @@ def matchCategories(name, note, category_number, cat_name):
 def baseprice_suffix(base_price, base_unit):
     return " ({}€/{})".format("{:.2f}".format(base_price).replace(".", ","), base_unit)
 
-def getArticles(category, articles, ignored_articles, articles_to_ignore):
+def get_articles(category, articles, ignored_articles, articles_to_ignore):
     for subcat in category:
         if subcat["items"] == [] : 
             continue
@@ -206,24 +207,24 @@ def getArticles(category, articles, ignored_articles, articles_to_ignore):
             if [x for x in articles if x.order_number == order_number]:
                 continue
             title = item.find(class_="font2 ic3 itemname").text.replace("Bio-", "").replace(" Pkg.", "").replace(" PKG.", "").replace(" Pkg", "").replace(" PKG", "").replace(" Stk.", "").replace(" Bd.", "").replace(" Str.", "").replace(" Fl.", "").replace(" kg", "").replace(" Glas", "").replace(" Dose", "").strip()
-            title_contents = re.split("(.+)\s(\d.?\d*.?\S+)\s?([a-zA-Z]*)", title)
+            title_contents = re.split(r"(.+)\s(\d.?\d*.?\S+)\s?([a-zA-Z]*)", title)
             if len(title_contents) > 1:
                 name = title_contents[1]
                 if title_contents[3]:
                     name += " " + title_contents[3]
             else:
                 name = title
-            producer = getIfFound(item, "ic2 producer")
-            note = getIfFound(item, "ic2 cinfotxt").replace("/Pkg.", "").replace(" Inhaltfüllung", "")
+            producer = get_if_found(item, "ic2 producer")
+            note = get_if_found(item, "ic2 cinfotxt").replace("/Pkg.", "").replace(" Inhaltfüllung", "")
             origin = ""
             if producer == "Landwirtschaft Pranger" or producer == "Produktion Biohof A. Pranger e.U.":
                 origin = "eigen"
             else:
-                address = getIfFound(item_details, "oo-producer-address")
+                address = get_if_found(item_details, "oo-producer-address")
                 if address:
                     origin = address.replace("Österreich", "").replace("AT-", "").replace("A-", "").strip()
                 else:
-                    origin = getIfFound(item, "herkunft")
+                    origin = get_if_found(item, "herkunft")
 
             base_raw = item.find(class_="price ic2")
             base_price, base_unit = ''.join(base_raw.find_all(text=True, recursive=False)).strip().split("€/")
@@ -240,7 +241,7 @@ def getArticles(category, articles, ignored_articles, articles_to_ignore):
                 if len(title_contents) > 1:
                     unit_info = title_contents[2]
                 elif note:
-                    unit_in_note = re.split("([c]?[a]?[.]?[ ]?\d+[.,]?\d*[a-zA-Z]+)", note)
+                    unit_in_note = re.split(r"([c]?[a]?[.]?[ ]?\d+[.,]?\d*[a-zA-Z]+)", note)
                     if len(unit_in_note) > 1:
                         unit_info = unit_in_note[1]
                         note = note.replace(unit_in_note[1], "").strip()
@@ -285,7 +286,7 @@ def getArticles(category, articles, ignored_articles, articles_to_ignore):
                 else:
                     favorite_option = prices[0]
 
-            item_description = getIfFound(item_details, "autohtml")
+            item_description = get_if_found(item_details, "autohtml")
             if item_description and not item_description in note:
                 if note:
                     if not note [-1] == ".":
@@ -297,7 +298,7 @@ def getArticles(category, articles, ignored_articles, articles_to_ignore):
             note = note.replace("\n", ". ")
             note = base.remove_double_strings_loop(text=note, string=" ", description="whitespaces")
 
-            cat_name = matchCategories(name=name, note=note, category_number=subcat["number"], cat_name=cat_name)
+            cat_name = match_categories(name=name, note=note, category_number=subcat["number"], cat_name=cat_name)
             article = foodsoft_article.Article(order_number=order_number, name=name, note=note, unit=favorite_option.unit, price_net=favorite_option.price, category=cat_name, manufacturer=producer, origin=origin, ignore=ignore, orig_unit=unit_info)
             if int(order_number) in articles_to_ignore:
                 article.ignore = True

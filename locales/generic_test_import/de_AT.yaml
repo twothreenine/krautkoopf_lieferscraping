@@ -8,6 +8,7 @@ test variable 2:
 # log
 started: "gestartet"
 executed: "ausgeführt"
+finished: "abgeschlossen"
 
 # methods
 run_script:

@@ -28,14 +28,15 @@ def config_variables(): # List of the special config variables this script uses,
         base.Variable(name="discount percentage", required=False, example=5)
         ]
 
-def environment_variables(): # List of the special environment variables this script uses, whether they are required and how they could look like
-    return [
-        base.Variable(name="LS_FOODSOFT_URL", required=False, example="https://app.foodcoops.at/coop_xy/"),
-        base.Variable(name="LS_FOODSOFT_URL", required=False, example="name@foobar.com"),
-        base.Variable(name="LS_FOODSOFT_PASS", required=False, example="asdf1234"),
-        base.Variable(name="LS_FAIRFOOD_USER", required=True, example="name@foobar.com"),
-        base.Variable(name="LS_FAIRFOOD_PASS", required=True, example="asdf1234")
-        ]
+# TODO: environment variables no longer supported!
+# def environment_variables(): # List of the special environment variables this script uses, whether they are required and how they could look like
+#     return [
+#         base.Variable(name="LS_FOODSOFT_URL", required=False, example="https://app.foodcoops.at/coop_xy/"),
+#         base.Variable(name="LS_FOODSOFT_URL", required=False, example="name@foobar.com"),
+#         base.Variable(name="LS_FOODSOFT_PASS", required=False, example="asdf1234"),
+#         base.Variable(name="LS_FAIRFOOD_USER", required=True, example="name@foobar.com"),
+#         base.Variable(name="LS_FAIRFOOD_PASS", required=True, example="asdf1234")
+#         ]
 
 class ScriptRun(base.Run):
     def __init__(self, foodcoop, configuration, started_by):
@@ -64,7 +65,7 @@ class ScriptRun(base.Run):
             #foodsoft_article.Article(order_number=orer_number, name=name, note=description, unit=TODO, price_net=TODO, category=TODO, manufacturer=TODO, origin=TODO, ignore=ignore, orig_unit=TODO)
 
 
-    def generate_csv(self):
+    def generate_csv(self, session):
         config = base.read_config(self.foodcoop, self.configuration)
         global supplier_id
         supplier_id = base.read_in_config(config, "Foodsoft supplier ID", None)
@@ -111,7 +112,7 @@ class ScriptRun(base.Run):
         # self.next_possible_methods = [set_as_imported]
         # self.completion_percentage = 80
 
-    def set_as_imported(self):
+    def set_as_imported(self, session):
         self.next_possible_methods = []
         self.completion_percentage = 100
 

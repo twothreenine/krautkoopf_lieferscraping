@@ -10,6 +10,7 @@
             <form action="/{{fc}}"><input type='submit' value='Zurück zum Hauptmenü'></form>
             <p>{{messages}}</p>
             <h1>Konfiguration {{configuration}} löschen?</h1>
+            <p>Achtung, dadurch werden alle Daten dieser Konfiguration unwiderruflich gelöscht!</p>
             <form action="/{{fc}}" method="post">
                 <input name="delete configuration" value="{{configuration}}" hidden>
                 <input type="submit" value="Löschen bestätigen">

@@ -8,15 +8,16 @@
     <body>
         <div>
             {{messages}}
-            <p>Hallo Mitglied der Foodcoop {{foodcoop}}.
-                <br/>Bitte gib das Passwort für folgenden Account ein:
-                <br/>{{foodsoft_user}}
-                <form action="{{request_path}}" method="post">
-                    {{!submitted_form_content}}
-                    <input name="password" type="password" />
-                    <input value="Anmelden" type="submit" />
-                </form>
-            </p>
+            <h1>{{foodcoop}} Lieferscraping - Login</h1>
+            <p>Bitte gib deine Zugangsdaten für folgende Foodsoft-Instanz ein:
+            <br/><a href="{{foodsoft_login_address}}" target="_blank">{{foodsoft_address}}</a></p>
+            <form action="{{request_path}}" method="post">
+                {{!submitted_form_content}}
+                <p><label>E-Mail: <input name="email" type="email" /></label></p>
+                <p><label>Passwort: <input name="password" type="password" /></label></p>
+                <p><input value="Anmelden" type="submit" /></p>
+            </form>
+            <a href="/">Andere Instanz auswählen</a>
         </div>
     </body>
 </html>

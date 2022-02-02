@@ -1,8 +1,8 @@
 import csv
 
 import base
-import foodsoft
 import foodsoft_article
+# import foodsoft # not needed anymore, if we use foodsoft_connector from given session
 
 def remove_articles_to_ignore(articles):
     return [x for x in articles if not x.ignore]
@@ -87,7 +87,7 @@ def compare_string(article, article_from_last_run, article_from_foodsoft, string
             setattr(article, string_type, manual_string)
     return article, configuration_config
 
-def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notifications=None, compare_name=True, compare_note=True, compare_manufacturer=True, compare_origin=True, compare_unit=True, compare_price=True, compare_vat=False, compare_deposit=False, compare_unit_quantity=False, compare_category=True):
+def compare_manual_changes(foodcoop, supplier, supplier_id, articles, foodsoft_connector=None, notifications=None, compare_name=True, compare_note=True, compare_manufacturer=True, compare_origin=True, compare_unit=True, compare_price=True, compare_vat=False, compare_deposit=False, compare_unit_quantity=False, compare_category=True):
     """
     This is an optional method which checks if article data has been modified manually in Foodsoft after the last CSV was created.
     In case the article data in the source did not change since the last run of the script and the article data from your Foodsoft instance differs, latter is adopted.
@@ -97,17 +97,19 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notificati
         notifications = []
 
     # Extract the configuration for this supplier
-    configuration_config = base.read_config(foodcoop=foodcoop, configuration=supplier, ensure_subconfig="manual changes")
-    foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = foodsoft.read_foodsoft_config()
+    configuration_config = base.read_config(foodcoop=foodcoop, configuration=supplier)
+    if "manual changes" not in configuration_config:
+        configuration_config["manual changes"] = {}
 
     # Connect to your Foodsoft instance and download the articles CSV of the supplier
-    if foodsoft_url and foodsoft_user and foodsoft_password and supplier_id:
-        fsc = foodsoft.FSConnector(url=foodsoft_url, supplier_id=supplier_id, user=foodsoft_user, password=foodsoft_password)
-        csv_from_foodsoft = csv.reader(fsc.get_articles_CSV().splitlines(), delimiter=';')
-        fsc.logout()
+    if foodsoft_connector and supplier_id:
+        # fsc = foodsoft.FSConnector(url=foodsoft_url, user=foodsoft_user, password=foodsoft_password)
+        csv_from_foodsoft = csv.reader(foodsoft_connector.get_articles_CSV(supplier_id=supplier_id).splitlines(), delimiter=';')
+        # fsc.logout()
         articles_from_foodsoft = foodsoft_article.read_articles_from_csv(csv_from_foodsoft)
     else:
         articles_from_foodsoft = []
+        notifications.append("ACHTUNG: Abgleichen der manuellen Änderungen in der Foodsoft fehlgeschlagen, da Foodsoft-Connector fehlt!")
 
     # Get the last CSV created by the script
     last_imported_run_name = base.read_in_config(configuration_config, "last imported run", "")
@@ -164,7 +166,7 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, notificati
                 configuration_config["manual changes"][article.order_number]["category"] = article_from_foodsoft.category
                 article.category = article_from_foodsoft.category
 
-    base.save_configuration(foodcoop=foodcoop, configuration=supplier, new_config=configuration_config)
+    base.save_config(foodcoop=foodcoop, configuration=supplier, config=configuration_config)
 
     return articles, notifications
 
@@ -209,8 +211,7 @@ def get_data_from_articles(articles, notifications):
 
     return rows, notifications
 
-def compose_articles_csv_message(supplier, supplier_id=None, categories=[], ignored_categories=[], ignored_subcategories=[], ignored_articles=[], notifications=[], prefix=""):
-    foodcoop, foodsoft_url, foodsoft_user, foodsoft_password = foodsoft.read_foodsoft_config()
+def compose_articles_csv_message(supplier, foodsoft_url=None, supplier_id=None, categories=[], ignored_categories=[], ignored_subcategories=[], ignored_articles=[], notifications=[], prefix=""):
     text = ""
     if prefix:
         text += prefix + "\n\n"

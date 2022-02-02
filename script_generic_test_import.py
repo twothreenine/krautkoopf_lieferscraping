@@ -22,19 +22,12 @@ def config_variables(): # List of the special config variables this script uses,
         base.Variable(name="test variable 2", required=True, example=[34, 92], description="Not actually used, only for testing")
         ]
 
-def environment_variables(): # List of the special environment variables this script uses, whether they are required and how they could look like
-    return [
-        # base.Variable(name="LS_FOODSOFT_URL", required=False, example="https://app.foodcoops.at/coop_xy/"),
-        # base.Variable(name="LS_FOODSOFT_USER", required=False, example="name@foobar.com"),
-        # base.Variable(name="LS_FOODSOFT_PASS", required=False, example="asdf1234")
-        ]
-
 class ScriptRun(base.Run):
     def __init__(self, foodcoop, configuration):
         super().__init__(foodcoop=foodcoop, configuration=configuration)
         self.next_possible_methods = [run_script]
 
-    def run_script(self, test_input="", test_file_input=None):
+    def run_script(self, session, test_input="", test_file_input=None):
         articles = []
         overlong_note = "This is a very long text. Since Foodsoft only supports up to 255 characters in the articles' data strings (note, manufacturer, origin) and won't validate them by itself, we have to resize it in order to not cause an error. Nobody would read it anyway to the end!"
         test = foodsoft_article.Article(available=False, order_number=1, name="Test article", note=overlong_note, unit="1 kg", price_net=5.40, category="Test")
@@ -57,20 +50,17 @@ class ScriptRun(base.Run):
         base.write_txt(file_path=base.file_path(path=self.path, folder="details", file_name="Log"), content="")
         self.next_possible_methods = [finish]
         self.completion_percentage = 80
-
-        # input demonstration
-        if test_input:
-            executed_entry = base.LogEntry(action="executed", done_by=test_input)
-            self.log.append(executed_entry)
+        self.log.append(base.LogEntry(action="executed", done_by=base.full_user_name(session)))
 
         # text file input demonstration
         # for file in test_file_input:
         #     for line in file.readlines():
         #         print(line.decode())
 
-    def finish(self):
+    def finish(self, session):
         self.next_possible_methods = []
         self.completion_percentage = 100
+        self.log.append(base.LogEntry(action="finished", done_by=base.full_user_name(session)))
 
 if __name__ == "__main__":
     importlib.invalidate_caches()
