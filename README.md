@@ -34,19 +34,6 @@ babel (for web interface)
 
 selenium (for Fairfood script)
 
-## Environment variables
-For some optional features, the following enviroment variables need to be set:
-- LS_FOODSOFT_URL=
-- LS_FOODSOFT_USER=
-- LS_FOODSOFT_PASS=
-
-for local use in Windows 10:
-
-- open system settings
-- search for "variable"
-- select "edit system environment variables" or "edit environment variables for this account" respectively (or similar)
-- set variables manually
-
 ## Details
 Da es in unserer Foodcoop Bedarf gab, den regelmäßigen Aufwand für das Bestellteam zu senken, habe ich ein Python-Skript geschrieben, das sämtliche Artikel einer bestimmten Lieferant_in ausliest (z.B. per Screenscraping aus dem Webshop, aus einer Exceltabelle wäre aber auch denkbar) und daraus eine CSV generiert, die in die Foodsoft importiert werden kann.
 Das Screenscraping bzw. Tabelle-auslesen muss natürlich je nach Lieferant/Webshop angepasst bzw. neu geschrieben werden, einige Funktionen (wie das Generieren der CSV) sind jedoch ausgelagert in „base“ und von allen Skripten abrufbar.
