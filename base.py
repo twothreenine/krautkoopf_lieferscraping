@@ -130,7 +130,10 @@ def find_available_locales():
 
 def find_instances():
     root_path = "data"
-    return [d for d in os.listdir(root_path) if os.path.isfile(os.path.join(root_path, d, "settings.yaml"))]
+    if os.path.isdir(root_path):
+        return [d for d in os.listdir(root_path) if os.path.isfile(os.path.join(root_path, d, "settings.yaml"))]
+    else:
+        return []
 
 def find_configurations(foodcoop):
     root_path = os.path.join("data", foodcoop)
