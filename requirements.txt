@@ -10,3 +10,5 @@ PyYAML==6.0
 requests==2.27.1
 soupsieve==2.3.1
 urllib3==1.26.8
+webdriver-manager==3.5.3
+selenium==4.1.3

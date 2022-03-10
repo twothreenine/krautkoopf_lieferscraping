@@ -317,5 +317,5 @@ if __name__ == "__main__":
     run = script.ScriptRun(foodcoop="krautkoopf", configuration="Biohof Pranger")
     while run.next_possible_methods:
         func = getattr(run, run.next_possible_methods[0].name)
-        func(initials="Konsole")
+        func(session) # TODO: define session
     run.save()
