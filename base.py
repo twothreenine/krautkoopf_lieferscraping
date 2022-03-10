@@ -3,6 +3,7 @@ import shutil
 import yaml
 import datetime
 import dill
+from natsort import natsorted
 
 class Run:
     """
@@ -260,7 +261,7 @@ def output_path(foodcoop, configuration):
 def get_outputs(foodcoop, configuration):
     path = output_path(foodcoop, configuration)
     if os.path.exists(path):
-        return [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
+        return [d for d in natsorted(os.listdir(path)) if os.path.isdir(os.path.join(path, d))]
     else:
         return []
 
