@@ -84,7 +84,7 @@ class Category:
     """
     Nestable categories e.g. for articles, for usage within a script.
     """
-    def __init__(self, number, name="", subcategories=None):
+    def __init__(self, number=None, name="", subcategories=None):
         self.number = number
         self.name = name
         if subcategories:
@@ -143,7 +143,7 @@ def find_configurations(foodcoop):
 def read_config(foodcoop, configuration):
     filename = os.path.join("data", foodcoop, configuration, "config.yaml")
     if os.path.isfile(filename):
-        with open(filename) as yaml_file:
+        with open(filename, encoding="UTF8") as yaml_file:
             configuration = yaml.safe_load(yaml_file)
     else:
         configuration = {}
@@ -159,7 +159,7 @@ def save_config(foodcoop, configuration, config):
     config_path = os.path.join("data", foodcoop, configuration)
     os.makedirs(config_path, exist_ok=True)
     filename = os.path.join(config_path, "config.yaml")
-    with open(filename, "w") as yaml_file:
+    with open(filename, "w", encoding="UTF8") as yaml_file:
         yaml.dump(config, yaml_file, allow_unicode=True, indent=4, sort_keys=False)
 
 def set_config_detail(foodcoop, configuration, detail, value):
@@ -281,7 +281,11 @@ def get_file_path(foodcoop, configuration, run, folder, ending="", notifications
 def list_categories(categories):
     txt = ""
     for category in categories:
-        txt += "#" + str(category.number) + " " + category.name
+        txt += "#"
+        if category.number:
+            txt += str(category.number)
+        if category.name:
+            txt += " " + category.name
         if category.subcategories:
             subcats = category.subcategories.copy()
             txt += " (inkl. Unterkategorien " + subcats[0].name

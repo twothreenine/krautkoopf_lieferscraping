@@ -1,6 +1,9 @@
 # variables
 Foodsoft supplier ID:
     name: "ID von Lieferant*in in Foodsoft"
+VAT on B2B articles:
+    name: "USt auf B2B-Artikel"
+    description: "in %"
 categories to ignore:
     name: "Zu ignorierende Kategorien"
 subcategories to ignore:

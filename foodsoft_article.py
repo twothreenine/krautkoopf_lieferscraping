@@ -1,7 +1,7 @@
 
 
 class Article:
-    def __init__(self, order_number, name, unit, price_net, available=True, note="", manufacturer="", origin="", vat=0, deposit=0, unit_quantity=1, category="", ignore=False, orig_unit=""):
+    def __init__(self, order_number, name, unit, price_net, available=True, note="", manufacturer="", origin="", vat=0, deposit=0, unit_quantity=1, category="", ignore=False, orig_unit="", **kwargs):
         self.available = available
         self.order_number = order_number
         self.name = name
@@ -16,6 +16,8 @@ class Article:
         self.category = category
         self.ignore = ignore # if True, the article will not be imported
         self.orig_unit = orig_unit # Short form of article's unit, used for distinguishing duplicates, not loaded into Foodsoft
+        for kwarg in kwargs: # additional variables
+            setattr(self, kwarg, kwargs[kwarg])
 
 def suffix(suffix, suffix_type=""):
     word = ""
