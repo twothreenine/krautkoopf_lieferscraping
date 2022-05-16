@@ -1,29 +1,34 @@
-- Shared supplier Feature verwenden?
-- Artikel können per CSV nicht auf inaktiv gesetzt, sondern nur gelöscht werden - ändern?
-
 aktuell:
-- Webinterface
-	- Session Management?? Wenn ich mich am PC einlogge, bin ich auch am Handy drin - wieso?
+- Webinterface mit Tornado neu schreiben?
+	kein Session-Management bei Bottle -> entweder Option finden mit der das trotzdem geht, oder in anderem Webframework wie Tornado neu schreiben
+- Verbesserungen fürs Webinterface:
 	- Instanz-Einstellungen-bearbeiten-Seite, Instanz-löschen-Option
-	- Config-Kategorien (ausklappbar? auf Startseite der Foodcoop)
+	- Config-Kategorien (ausklappbar? auf Startseite der Instanz)
 	- Besser mit hochgeladenen Dateien umgehen
-	- woher kommt "favicon.ico"-Ordner in den instances???
-
+	- Fileupload in Konfiguration ermöglichen, manual changes als extra yaml oder csv
+	- Aufbau anpassen (Labels und Inputs geordneter)
+	- Locales erweitern
 	- "Foodcoop" in "Instance" oder "Usergroup" umbenennen?
-	- manual changes als extra yaml, oder als csv?
 
 	- Bug mit Permission Error bei Umbenennen einer Konfiguration (Ordner) fixen? --> vorerst disabled
-	- Aufbau anpassen (Labels und Inputs geordneter)
 (- Ignore-Feature für Produzenten, Herkunft und Herkunft-startet-mit (z.B. PLZ 2...))
-- Locales
-- Nächste Skripte: Fairfood, Cafe Libertad, Hiel ...
-	auch jeweils Skript um Bestellung abzuschicken? auch für Pranger?
+
+- Nächste Skripte: 
+	- Cafe Libertad, Hiel ... auch jeweils Skript um Bestellung abzuschicken? auch für Pranger?
+	in Verbindung mit neuem Taskrotation:
+	- Pranger-Skript jeden Donnerstag um 3:00 Uhr selbstständig ausführen (Webshop auslesen)
+	- Alle wöchentlichen Bestellungen mit wenigen Klicks eröffnen (dafür muss das Tool wissen, wann welche Lieferant*innen dran sind -> Taskrotation)
+	- Sortimentsübersicht aktualisieren (entweder in eigenes Interface oder in ein Ethercalc)
+	- Regner-Anruf?
 
 Ideen für Tools mit ähnlichem (eigenen) Web-Interface:
 - Taskrotation
-- Kerndlflows-Tools mit Python-Matrix-Anbindung
+- Sortimentsübersicht (oder als Ethercalc)
+(- Kerndlflows-Tools mit Python-Matrix-Anbindung)
 
 Deployment:
 - Commits in foodcoopsat-Repo übertragen
 - data hochladen?
-- Cronjob? (Pranger-Skript in bestimmtem Turnus automatisch ausführen: jeden Donnerstag um 3:00 Uhr) In Web-Interface integrieren?
+
+in Foodsoft ändern?
+- Artikel können per CSV nicht auf inaktiv gesetzt, sondern nur gelöscht werden

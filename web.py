@@ -1,4 +1,5 @@
 import bottle
+# import waitress
 import re
 import os
 import numbers
@@ -10,7 +11,7 @@ import babel.dates
 import base
 import foodsoft
 
-class Session(bottle.Bottle):
+class App(bottle.Bottle):
     def __init__(self):
         super().__init__()
         self.instance = None
@@ -27,23 +28,25 @@ class Session(bottle.Bottle):
         self.locales = base.read_locales(instance)
         self.locale = self.settings["default_locale"]
 
-session = Session()
+app = App()
+# plugin = bottle_session.SessionPlugin(cookie_lifetime=600)#, cookie_secure=True, cookie_httponly=True)
+# app.install(plugin)
 
 def get_locale_string(term, script_name, substring="", enforce_return=False):
-    if term in session.locales[script_name] and substring in session.locales[script_name][term]:
+    if term in app.locales[script_name] and substring in app.locales[script_name][term]:
         if substring:
-            string = session.locales[script_name][term][substring]
+            string = app.locales[script_name][term][substring]
         else:
-            string = session.locales[script_name][term]
-    elif term in session.locales["base"] and substring in session.locales["base"][term]:
+            string = app.locales[script_name][term]
+    elif term in app.locales["base"] and substring in app.locales["base"][term]:
         if substring:
-            string = session.locales["base"][term][substring]
+            string = app.locales["base"][term][substring]
         else:
-            string = session.locales["base"][term]
-    elif substring == "name" and term in session.locales[script_name]:
-        string = session.locales[script_name][term]
-    elif substring == "name" and term in session.locales["base"]:
-        string = session.locales["base"][term]
+            string = app.locales["base"][term]
+    elif substring == "name" and term in app.locales[script_name]:
+        string = app.locales[script_name][term]
+    elif substring == "name" and term in app.locales["base"]:
+        string = app.locales["base"][term]
     elif enforce_return:
         string = term
     else:
@@ -51,31 +54,33 @@ def get_locale_string(term, script_name, substring="", enforce_return=False):
     return string
 
 def read_messages():
-    global session
-    content = "<br/>".join(session.messages)
-    session.messages = []
+    global app
+    content = "<br/>".join(app.messages)
+    app.messages = []
     return content
 
 def check_login(submitted_form, instance):
-    global session
-    if session.foodsoft_connector:
-        if session.instance == instance:
+    global app
+
+    if app.foodsoft_connector:
+        if app.instance == instance:
             return True
         else:
             return False
     elif 'password' in submitted_form:
+        app.switch_to_instance(instance)
         success = None
         feedback = ""
         email = submitted_form.get('email')
         password = submitted_form.get('password')
-        foodsoft_address = session.settings.get('foodsoft_url')
-        session.foodsoft_connector = foodsoft.FSConnector(url=foodsoft_address, user=email, password=password)
-        session.foodsoft_connector.add_user_data(workgroups=True)
-        if session.foodsoft_connector._session:
-            message = f"Hallo {session.foodsoft_connector.first_name}!"
-            allowed_workgroups = session.settings.get('allowed_workgroups')
+        foodsoft_address = app.settings.get('foodsoft_url')
+        app.foodsoft_connector = foodsoft.FSConnector(url=foodsoft_address, user=email, password=password)
+        app.foodsoft_connector.add_user_data(workgroups=True)
+        if app.foodsoft_connector._session:
+            message = f"Hallo {app.foodsoft_connector.first_name}!"
+            allowed_workgroups = app.settings.get('allowed_workgroups')
             if allowed_workgroups:
-                matching_workgroups = [wg for wg in session.foodsoft_connector.workgroups if wg in allowed_workgroups]
+                matching_workgroups = [wg for wg in app.foodsoft_connector.workgroups if wg in allowed_workgroups]
                 print(matching_workgroups)
                 if matching_workgroups:
                     success = True
@@ -85,13 +90,13 @@ def check_login(submitted_form, instance):
             else:
                 success = True
         if success:
-            session.instance = instance
+            app.instance = instance
             message += " Deine Anmeldung war erfolgreich."
-            session.messages.append(message)
+            app.messages.append(message)
             return True
         else:
-            session.foodsoft_connector = None
-            session.messages.append("Login fehlgeschlagen: E-Mail-Adresse und/oder Passwort falsch.")
+            app.foodsoft_connector = None
+            app.messages.append("Login fehlgeschlagen: E-Mail-Adresse und/oder Passwort falsch.")
             return False
     else:
         return None
@@ -118,10 +123,10 @@ def login_link(instance):
     return bottle.template("<p><a href='/{{instance}}'>{{instance}}</a></p>", instance=instance)
 
 def configuration_link(configuration):
-    return bottle.template("<a href='/{{foodcoop}}/{{configuration}}'>{{configuration}}</a>", foodcoop=session.instance, configuration=configuration)
+    return bottle.template("<a href='/{{foodcoop}}/{{configuration}}'>{{configuration}}</a>", foodcoop=app.instance, configuration=configuration)
 
 def display_output_link(configuration, run_name):
-    return bottle.template("<a href='/{{foodcoop}}/{{configuration}}/display/{{run_name}}'>{{run_name}}</a>", foodcoop=session.instance, configuration=configuration, run_name=run_name)
+    return bottle.template("<a href='/{{foodcoop}}/{{configuration}}/display/{{run_name}}'>{{run_name}}</a>", foodcoop=app.instance, configuration=configuration, run_name=run_name)
 
 def available_scripts():
     script_files = [f for f in os.listdir() if f.startswith("script_") and f.endswith(".py")]
@@ -155,13 +160,13 @@ def script_options(selected_script=None):
 
 def import_script(configuration):
     importlib.invalidate_caches()
-    config = base.read_config(foodcoop=session.instance, configuration=configuration)
+    config = base.read_config(foodcoop=app.instance, configuration=configuration)
     script_name = "script_" + base.read_in_config(config=config, detail="Script name")
     script = importlib.import_module(script_name)
     return script
 
 def run_path(configuration, run_name):
-    return os.path.join("data", session.instance, configuration, run_name)
+    return os.path.join("data", app.instance, configuration, run_name)
 
 def list_files(path, folder="download"):
     files = []
@@ -193,7 +198,7 @@ def output_link_with_download_button(configuration, script, run_name):
             source = "/download/" + run_path(configuration, run_name) + "/download/" + files[0]
         else:
             source = zip_download(configuration, run_name)
-        form_content = f"<input name='origin' value='/{session.instance}/{configuration}/display/{run_name}' hidden><input type='submit' value='⤓'>"
+        form_content = f"<input name='origin' value='/{app.instance}/{configuration}/display/{run_name}' hidden><input type='submit' value='⤓'>"
     progress_bar = '<progress id="run" value="{}" max="100"></progress>'.format(run.completion_percentage)
     return bottle.template("<form action='{{source}}' method='post'>{{!form_content}} {{!affix}} {{!progress_bar}}</form>", source=source, form_content=form_content, affix=output_link, progress_bar=progress_bar)
 
@@ -202,10 +207,10 @@ def all_download_buttons(configuration, run_name):
     path = run_path(configuration, run_name)
     files = list_files(path)
     if len(files) > 1:
-        content += bottle.template('templates/download_button.tpl', source=zip_download(configuration, run_name), value="⤓ ZIP", affix="", foodcoop=session.instance, configuration=configuration, run_name=run_name)
+        content += bottle.template('templates/download_button.tpl', source=zip_download(configuration, run_name), value="⤓ ZIP", affix="", foodcoop=app.instance, configuration=configuration, run_name=run_name)
     for file in files:
-        source = "/download/data/" + session.instance + "/" + configuration + "/" + run_name + "/download/" + file
-        content += bottle.template('templates/download_button.tpl', source=source, value="⤓ " + file, affix="", foodcoop=session.instance, configuration=configuration, run_name=run_name)
+        source = "/download/data/" + app.instance + "/" + configuration + "/" + run_name + "/download/" + file
+        content += bottle.template('templates/download_button.tpl', source=source, value="⤓ " + file, affix="", foodcoop=app.instance, configuration=configuration, run_name=run_name)
     return content
 
 def display(path, display_type="display"):
@@ -273,7 +278,7 @@ def add_config_variable_field(detail, config, config_variables, special_variable
     if config_content:
         config_content += "<br/>"
     if str(detail) == "manual changes":
-        config_content += session.locales["base"]["manual changes"].format(str(len(config[detail])))
+        config_content += app.locales["base"]["manual changes"].format(str(len(config[detail])))
     else:
         config_content += f"<label>{get_locale_string(term=str(detail), substring='name', script_name=script_name, enforce_return=True)}: "
         input_type = "input"
@@ -317,10 +322,10 @@ def add_config_variable_field(detail, config, config_variables, special_variable
     return config_content
 
 def add_instance(submitted_form):
-    global session
+    global app
     new_instance_name = submitted_form.get('new instance name').strip()
     if base.equal_strings_check([new_instance_name], base.find_instances()):
-        session.messages.append(f"Es existiert bereits eine Instanz namens {new_instance_name}! Bitte wähle einen anderen Namen.")
+        app.messages.append(f"Es existiert bereits eine Instanz namens {new_instance_name}! Bitte wähle einen anderen Namen.")
         return new_instance_page(submitted_form)
     else:
         settings = {
@@ -330,18 +335,18 @@ def add_instance(submitted_form):
             "configuration_groups": {}
             }
         base.save_settings(new_instance_name, settings)
-        session.messages.append("Instanz angelegt.")
+        app.messages.append("Instanz angelegt.")
         return login_page(new_instance_name)
 
 def add_configuration(submitted_form):
-    global session
+    global app
     new_configuration_name = submitted_form.get('new configuration name').strip()
-    if base.equal_strings_check([new_configuration_name], base.find_configurations(foodcoop=session.instance)):
-        session.messages.append("Es existiert bereits eine Konfiguration namens " + new_configuration_name + " für " + session.instance.capitalize() + ". Bitte wähle einen anderen Namen.")
+    if base.equal_strings_check([new_configuration_name], base.find_configurations(foodcoop=app.instance)):
+        app.messages.append("Es existiert bereits eine Konfiguration namens " + new_configuration_name + " für " + app.instance.capitalize() + ". Bitte wähle einen anderen Namen.")
         return new_configuration_page()
     else:
-        base.save_config(foodcoop=session.instance, configuration=new_configuration_name, config={"Script name": submitted_form.get('script name')})
-        session.messages.append("Konfiguration angelegt.")
+        base.save_config(foodcoop=app.instance, configuration=new_configuration_name, config={"Script name": submitted_form.get('script name')})
+        app.messages.append("Konfiguration angelegt.")
         script = import_script(configuration=new_configuration_name)
         config_variables = script.config_variables()
         if config_variables:
@@ -350,7 +355,7 @@ def add_configuration(submitted_form):
             return main_page()
 
 def save_configuration_edit(configuration, submitted_form):
-    config = base.read_config(foodcoop=session.instance, configuration=configuration)
+    config = base.read_config(foodcoop=app.instance, configuration=configuration)
     for name in submitted_form:
         if name == "configuration name" or name == "password":
             continue
@@ -371,28 +376,28 @@ def save_configuration_edit(configuration, submitted_form):
             config[name] = value
         elif name in config:
             config.pop(name)
-    base.save_config(foodcoop=session.instance, configuration=configuration, config=config)
+    base.save_config(foodcoop=app.instance, configuration=configuration, config=config)
     # TODO: Renaming a configuration sometimes leads to PermissionError: [WinError 5], therefore the input field is disabled for now
     # configuration_name = submitted_form.get('configuration name')
     # if configuration_name != configuration:
-    #     renamed_configuration = base.rename_configuration(foodcoop=session.instance, old_configuration_name=configuration, new_configuration_name=configuration_name)
+    #     renamed_configuration = base.rename_configuration(foodcoop=app.instance, old_configuration_name=configuration, new_configuration_name=configuration_name)
     #     if renamed_configuration:
-    #         global session
-    #         session.messages.append('Konfiguration "{}" erfolgreich in "{}" umbenannt.'.format(configuration, renamed_configuration))
+    #         global app
+    #         app.messages.append('Konfiguration "{}" erfolgreich in "{}" umbenannt.'.format(configuration, renamed_configuration))
     #     return configuration_name
     # else:
     return configuration
 
 def del_configuration(submitted_form):
-    global session
+    global app
     configuration_to_delete = submitted_form.get('delete configuration')
-    success, feedback = base.delete_configuration(session.instance, configuration_to_delete)
+    success, feedback = base.delete_configuration(app.instance, configuration_to_delete)
     if success:
-        session.messages.append(configuration_to_delete + " erfolgreich gelöscht.")
+        app.messages.append(configuration_to_delete + " erfolgreich gelöscht.")
     elif feedback:
-        session.messages.append(feedback)
+        app.messages.append(feedback)
     else:
-        session.messages.append("Löschen von " + configuration_to_delete + " fehlgeschlagen: Konfiguration scheint nicht zu existieren.")
+        app.messages.append("Löschen von " + configuration_to_delete + " fehlgeschlagen: Konfiguration scheint nicht zu existieren.")
     return main_page()
 
 def root_page():
@@ -424,38 +429,38 @@ def new_instance_page(submitted_form=None):
 
 def main_page():
     content = ""
-    for configuration in base.find_configurations(foodcoop=session.instance):
+    for configuration in base.find_configurations(foodcoop=app.instance):
         if content:
             content += "<br/>"
         content += configuration_link(configuration)
 
-    return bottle.template('templates/main.tpl', messages=read_messages(), base_locales=session.locales["base"], fc=session.instance, foodcoop=session.instance.capitalize(), configurations=content)
+    return bottle.template('templates/main.tpl', messages=read_messages(), base_locales=app.locales["base"], fc=app.instance, foodcoop=app.instance.capitalize(), configurations=content)
 
 def login_page(fc, request_path=None, submitted_form=None):
     if not request_path:
         request_path = "/" + fc
-    global session
-    if session.foodsoft_connector and session.instance != fc:
+    global app
+    if app.foodsoft_connector and app.instance != fc:
         return switch_instance_page(fc, request_path, submitted_form)
     else:
-        session.switch_to_instance(fc)
-        foodsoft_address = session.settings["foodsoft_url"]
+        app.switch_to_instance(fc)
+        foodsoft_address = app.settings["foodsoft_url"]
         foodsoft_login_address = foodsoft_address
         if not foodsoft_login_address.endswith("/"):
             foodsoft_login_address += "/"
         foodsoft_login_address += "login"
-        description = session.settings.get("description", "")
-        return bottle.template('templates/login.tpl', messages=read_messages(), request_path=request_path, submitted_form_content=submitted_form_content(submitted_form), foodcoop=session.instance.capitalize(), foodsoft_address=foodsoft_address, foodsoft_login_address=foodsoft_login_address, description=description)
+        description = app.settings.get("description", "")
+        return bottle.template('templates/login.tpl', messages=read_messages(), request_path=request_path, submitted_form_content=submitted_form_content(submitted_form), foodcoop=app.instance.capitalize(), foodsoft_address=foodsoft_address, foodsoft_login_address=foodsoft_login_address, description=description)
 
 def switch_instance_page(requested_instance, request_path=None, submitted_form=None):
-    return bottle.template('templates/switch_instance.tpl', requested_instance=requested_instance, current_instance=session.instance, submitted_form_content=submitted_form_content(submitted_form, request_path))
+    return bottle.template('templates/switch_instance.tpl', requested_instance=requested_instance, current_instance=app.instance, submitted_form_content=submitted_form_content(submitted_form, request_path))
 
 def configuration_page(configuration):
-    config = base.read_config(foodcoop=session.instance, configuration=configuration)
+    config = base.read_config(foodcoop=app.instance, configuration=configuration)
     script_name = base.read_in_config(config, "Script name")
     script = import_script(configuration=configuration)
     output_content = ""
-    outputs = base.get_outputs(foodcoop=session.instance, configuration=configuration)
+    outputs = base.get_outputs(foodcoop=app.instance, configuration=configuration)
     if not outputs:
         output_content += "Keine Ausführungen gefunden."
     outputs.reverse()
@@ -471,22 +476,22 @@ def configuration_page(configuration):
         if config_content:
             config_content += "<br/>"
         if str(detail) == "manual changes":
-            config_content += session.locales["base"]["manual changes"].format(str(len(config[detail])))
+            config_content += app.locales["base"]["manual changes"].format(str(len(config[detail])))
         else:
             config_content += get_locale_string(term=str(detail), substring='name', script_name=script_name, enforce_return=True) + ": " + str(config[detail])
 
-    return bottle.template('templates/configuration.tpl', messages=read_messages(), fc=session.instance, foodcoop=session.instance.capitalize(), configuration=configuration, output_content=output_content, config_content=config_content)
+    return bottle.template('templates/configuration.tpl', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), configuration=configuration, output_content=output_content, config_content=config_content)
 
 def run_page(configuration, script, run):
     downloads = all_download_buttons(configuration, run.name)
-    script_name = base.read_in_config(base.read_config(session.instance, configuration), "Script name")
+    script_name = base.read_in_config(base.read_config(app.instance, configuration), "Script name")
 
     log_entries = []
     for entry in run.log:
         entry_string = get_locale_string(term=entry.action, script_name=script_name, enforce_return=True)
         if entry.done_by:
             entry_string += f" von {entry.done_by}"
-        entry_string += f" am {babel.dates.format_datetime(datetime=entry.datetime, format='short', locale=session.locale)}"
+        entry_string += f" am {babel.dates.format_datetime(datetime=entry.datetime, format='short', locale=app.locale)}"
         log_entries.append(entry_string)
     log_text = ", ".join(log_entries)
     if log_text:
@@ -495,31 +500,31 @@ def run_page(configuration, script, run):
 
     continue_content = ""
     for option in run.next_possible_methods:
-        option_locales = session.locales[script_name][option.name]
+        option_locales = app.locales[script_name][option.name]
         inputs = ""
         for ipt in option.inputs:
             inputs = add_input_field(ipt=ipt, script_name=script_name, input_content=inputs)
-        continue_content += bottle.template('templates/continue_option.tpl', fc=session.instance, configuration=configuration, run_name=run.name, option_name=option.name, option_locales=option_locales, inputs=inputs)
+        continue_content += bottle.template('templates/continue_option.tpl', fc=app.instance, configuration=configuration, run_name=run.name, option_name=option.name, option_locales=option_locales, inputs=inputs)
     display_content = ""
     display_content += display(path=run.path, display_type="display")
     display_content += display(path=run.path, display_type="details")
-    return bottle.template('templates/run.tpl', messages=read_messages(), fc=session.instance, foodcoop=session.instance.capitalize(), configuration=configuration, run=run, log_text=log_text, completion_percentage=run.completion_percentage, downloads=downloads, continue_content=continue_content, display_content=display_content)
+    return bottle.template('templates/run.tpl', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), configuration=configuration, run=run, log_text=log_text, completion_percentage=run.completion_percentage, downloads=downloads, continue_content=continue_content, display_content=display_content)
 
 def edit_configuration_page(configuration):
     config_content = ""
-    config = base.read_config(foodcoop=session.instance, configuration=configuration)
+    config = base.read_config(foodcoop=app.instance, configuration=configuration)
     script_name = base.read_in_config(config, "Script name")
     script = import_script(configuration=configuration)
     config_variables = script.config_variables()
     special_variables = ["Script name", "number of runs to list", "last imported run"]
 
     if "last imported run" in [c_v.name for c_v in config_variables]:
-        runs = base.get_outputs(foodcoop=session.instance, configuration=configuration)
+        runs = base.get_outputs(foodcoop=app.instance, configuration=configuration)
         if runs:
             runs.reverse()
-            config_content += f"<label>{session.locales['base']['last imported run']}: "
+            config_content += f"<label>{app.locales['base']['last imported run']}: "
             config_content += "<select name='last imported run'>"
-            config_content += f"<option>{session.locales['base']['none (feminine)']}</option>"
+            config_content += f"<option>{app.locales['base']['none (feminine)']}</option>"
             last_imported_run = base.read_in_config(config, "last imported run", "")
             for run in runs:
                 selected = ""
@@ -542,15 +547,15 @@ def edit_configuration_page(configuration):
 
     number_of_runs_to_list = base.read_in_config(config, "number of runs to list", 5)
 
-    return bottle.template('templates/edit_configuration.tpl', messages=read_messages(), fc=session.instance, foodcoop=session.instance.capitalize(), base_locales=session.locales["base"], configuration=configuration, number_of_runs_to_list=number_of_runs_to_list, config_content=config_content, script_options=script_options(selected_script=config["Script name"]))
+    return bottle.template('templates/edit_configuration.tpl', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), base_locales=app.locales["base"], configuration=configuration, number_of_runs_to_list=number_of_runs_to_list, config_content=config_content, script_options=script_options(selected_script=config["Script name"]))
 
 def delete_configuration_page(configuration):
-    return bottle.template('templates/delete_configuration.tpl', messages=read_messages(), fc=session.instance, foodcoop=session.instance.capitalize(), configuration=configuration)
+    return bottle.template('templates/delete_configuration.tpl', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), configuration=configuration)
 
 def new_configuration_page():
-    return bottle.template('templates/new_configuration.tpl', messages=read_messages(), fc=session.instance, foodcoop=session.instance.capitalize(), script_options=script_options())
+    return bottle.template('templates/new_configuration.tpl', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), script_options=script_options())
 
-@session.route('/', method='ANY')
+@app.route('/', method='ANY')
 def root():
     submitted_form = bottle.request.forms
     if 'new instance' in submitted_form:
@@ -560,20 +565,21 @@ def root():
     else:
         return root_page()
 
-@session.route('/<fc>')
+@app.route('/<fc>')
 def login(fc):
     if check_login(bottle.request.forms, fc):
         return main_page()
     else:
         return login_page(fc)
 
-@session.route('/<fc>', method='POST')
+@app.route('/<fc>', method='POST')
 def do_main(fc):
     submitted_form = bottle.request.forms
     if 'logout' in submitted_form:
-        global session
-        session = Session()
-        session.messages.append("Logout erfolgreich.")
+        global app
+        app = App()
+        app.instance = None
+        app.messages.append("Logout erfolgreich.")
         request_path = submitted_form.get("request_path")
         if request_path:
             return login_page(fc, request_path)
@@ -591,21 +597,21 @@ def do_main(fc):
     else:
         return login_page(fc)
 
-@session.route('/<fc>/<configuration>', method='ANY')
+@app.route('/<fc>/<configuration>', method='ANY')
 def configuration(fc, configuration):
-    global session
+    global app
     submitted_form = bottle.request.forms
     if check_login(submitted_form, fc):
         if "Script name" in submitted_form:
             configuration = save_configuration_edit(configuration=configuration, submitted_form=submitted_form)
-            session.messages.append("Änderungen in Konfiguration gespeichert.")
+            app.messages.append("Änderungen in Konfiguration gespeichert.")
         return configuration_page(configuration)
     else:
         return login_page(fc, bottle.request.path, submitted_form)
 
-@session.route('/<fc>/<configuration>/display/<run_name>', method='ANY')
+@app.route('/<fc>/<configuration>/display/<run_name>', method='ANY')
 def display_run(fc, configuration, run_name):
-    global session
+    global app
     submitted_form = bottle.request.forms
     if check_login(submitted_form, fc):
         importlib.invalidate_caches()
@@ -635,27 +641,27 @@ def display_run(fc, configuration, run_name):
                     if value:
                         parameters[ipt.name] = value
             func = getattr(run, method)
-            func(session, **parameters)
+            func(app, **parameters)
             run.save()
             script_name = base.read_in_config(base.read_config(fc, configuration), "Script name")
-            session.messages.append(session.locales[script_name][method]["name"] + " wurde ausgeführt.")
+            app.messages.append(app.locales[script_name][method]["name"] + " wurde ausgeführt.")
         return run_page(configuration, script, run)
     else:
         return login_page(fc, bottle.request.path, submitted_form)
 
-@session.route('/<fc>/<configuration>/new_run', method='ANY')
+@app.route('/<fc>/<configuration>/new_run', method='ANY')
 def start_script_run(fc, configuration):
     submitted_form = bottle.request.forms
     if check_login(submitted_form, fc):
         importlib.invalidate_caches()
         script = import_script(configuration=configuration)
-        run = script.ScriptRun(foodcoop=session.instance, configuration=configuration)
+        run = script.ScriptRun(foodcoop=app.instance, configuration=configuration)
         run.save()
         return run_page(configuration, script, run)
     else:
         return login_page(fc, bottle.request.path, submitted_form)
 
-@session.route('/<fc>/<configuration>/edit', method='ANY')
+@app.route('/<fc>/<configuration>/edit', method='ANY')
 def edit_configuration(fc, configuration):
     submitted_form = bottle.request.forms
     if check_login(submitted_form, fc):
@@ -663,7 +669,7 @@ def edit_configuration(fc, configuration):
     else:
         return login_page(fc, bottle.request.path)
 
-@session.route('/<fc>/<configuration>/delete', method='ANY')
+@app.route('/<fc>/<configuration>/delete', method='ANY')
 def delete_configuration(fc, configuration):
     submitted_form = bottle.request.forms
     if check_login(submitted_form, fc):
@@ -671,7 +677,7 @@ def delete_configuration(fc, configuration):
     else:
         return login_page(fc, bottle.request.path, submitted_form)
 
-@session.route('/download/<filename:path>', method='ANY')
+@app.route('/download/<filename:path>', method='ANY')
 def download(filename):
     submitted_form = bottle.request.forms
     dir_array = os.path.normpath(filename).split(os.path.sep)
@@ -681,17 +687,23 @@ def download(filename):
     else:
         return login_page(fc=fc, request_path=submitted_form.get("origin"))
 
-@session.route("/templates/styles.css")
+@app.route("/templates/styles.css")
 def send_css(filename='styles.css'):
     return bottle.static_file(filename, root="templates")
 
-@session.get('/media/:path#.+#')
+@app.get('/media/:path#.+#')
 def server_static(path):
     return bottle.static_file(path, root="media")
 
-@session.get('/favicon.ico')
+@app.get('/favicon.ico')
 def get_favicon():
     return server_static('favicon.ico')
 
 if __name__ == "__main__":
-    bottle.run(session, host='0.0.0.0', port=8080, debug=True, reloader=True)
+    # waitress.serve(app)
+    bottle.run(app, host='0.0.0.0', port=8080, debug=True)
+    # finally:
+    #     print('Stopped')
+    # cherrypy.tree.graft(app, "/")
+    # cherrypy.server.socket_port = 8080
+    # cherrypy.quickstart()
