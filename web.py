@@ -3,7 +3,7 @@ import bottle
 import re
 import os
 import numbers
-import json
+import yaml
 import importlib
 from zipfile import ZipFile
 import babel.dates
@@ -71,8 +71,8 @@ def check_login(submitted_form, instance):
         app.switch_to_instance(instance)
         success = None
         feedback = ""
-        email = submitted_form.get('email')
-        password = submitted_form.get('password')
+        email = submitted_form.getunicode('email')
+        password = submitted_form.getunicode('password')
         foodsoft_address = app.settings.get('foodsoft_url')
         app.foodsoft_connector = foodsoft.FSConnector(url=foodsoft_address, user=email, password=password)
         app.foodsoft_connector.add_user_data(workgroups=True)
@@ -116,7 +116,7 @@ def submitted_form_content(submitted_form, request_path=None):
         submitted_form_content += f'<input name="request_path" value="{request_path}" hidden />'
     if submitted_form:
         for field in submitted_form:
-            submitted_form_content += f'<input name="{field}" value="{submitted_form.get(field)}" hidden />'
+            submitted_form_content += f'<input name="{field}" value="{submitted_form.getunicode(field)}" hidden />'
     return submitted_form_content
 
 def login_link(instance):
@@ -281,7 +281,7 @@ def add_config_variable_field(detail, config, config_variables, special_variable
         config_content += app.locales["base"]["manual changes"].format(str(len(config[detail])))
     else:
         config_content += f"<label>{get_locale_string(term=str(detail), substring='name', script_name=script_name, enforce_return=True)}: "
-        input_type = "input"
+        input_type = "input type='text'"
         placeholder = ""
         required = ""
         value = ""
@@ -295,7 +295,7 @@ def add_config_variable_field(detail, config, config_variables, special_variable
             if variable.required:
                 required = "required"
             if variable.example:
-                placeholder = "placeholder='" + str(variable.example) + "'"
+                placeholder = f'placeholder="{str(variable.example)}"'
                 example = variable.example
             description = get_locale_string(term=str(detail), substring='description', script_name=script_name)
             if description:
@@ -313,7 +313,10 @@ def add_config_variable_field(detail, config, config_variables, special_variable
 
         value = str(value)
         if input_type.startswith("input"):
-            value = f"value='{value}'"
+            if value:
+                value = f"value={value}"
+            else:
+                value = "value=''"
             config_content += f"<{input_type} name='{detail}' {value} {placeholder} {required}>"
         else:
             config_content += f"<{input_type} name='{detail}' {placeholder} {required}>{value}</{input_type}>"
@@ -323,15 +326,15 @@ def add_config_variable_field(detail, config, config_variables, special_variable
 
 def add_instance(submitted_form):
     global app
-    new_instance_name = submitted_form.get('new instance name').strip()
+    new_instance_name = submitted_form.getunicode('new instance name').strip()
     if base.equal_strings_check([new_instance_name], base.find_instances()):
         app.messages.append(f"Es existiert bereits eine Instanz namens {new_instance_name}! Bitte wähle einen anderen Namen.")
         return new_instance_page(submitted_form)
     else:
         settings = {
-            "description": submitted_form.get('description'),
-            "default_locale": submitted_form.get('locale'),
-            "foodsoft_url": submitted_form.get('foodsoft url'),
+            "description": submitted_form.getunicode('description'),
+            "default_locale": submitted_form.getunicode('locale'),
+            "foodsoft_url": submitted_form.getunicode('foodsoft url'),
             "configuration_groups": {}
             }
         base.save_settings(new_instance_name, settings)
@@ -340,12 +343,12 @@ def add_instance(submitted_form):
 
 def add_configuration(submitted_form):
     global app
-    new_configuration_name = submitted_form.get('new configuration name').strip()
+    new_configuration_name = submitted_form.getunicode('new configuration name').strip()
     if base.equal_strings_check([new_configuration_name], base.find_configurations(foodcoop=app.instance)):
         app.messages.append("Es existiert bereits eine Konfiguration namens " + new_configuration_name + " für " + app.instance.capitalize() + ". Bitte wähle einen anderen Namen.")
         return new_configuration_page()
     else:
-        base.save_config(foodcoop=app.instance, configuration=new_configuration_name, config={"Script name": submitted_form.get('script name')})
+        base.save_config(foodcoop=app.instance, configuration=new_configuration_name, config={"Script name": submitted_form.getunicode('script name')})
         app.messages.append("Konfiguration angelegt.")
         script = import_script(configuration=new_configuration_name)
         config_variables = script.config_variables()
@@ -359,13 +362,17 @@ def save_configuration_edit(configuration, submitted_form):
     for name in submitted_form:
         if name == "configuration name" or name == "password":
             continue
-        value = submitted_form.get(name)
+        value = submitted_form.getunicode(name)
         if value:
             if value.startswith("[") and value.endswith("]"):
                 try:
-                    value = json.loads(value)
+                    value = yaml.safe_load(value)
                 except:
                     raise
+            elif value.casefold() == "true": # use checkboxes in the form instead of converting strings to booleans
+                value = True
+            elif value.casefold() == "false":
+                value = False
             else:
                 try:
                     value = int(value)
@@ -378,7 +385,7 @@ def save_configuration_edit(configuration, submitted_form):
             config.pop(name)
     base.save_config(foodcoop=app.instance, configuration=configuration, config=config)
     # TODO: Renaming a configuration sometimes leads to PermissionError: [WinError 5], therefore the input field is disabled for now
-    # configuration_name = submitted_form.get('configuration name')
+    # configuration_name = submitted_form.getunicode('configuration name')
     # if configuration_name != configuration:
     #     renamed_configuration = base.rename_configuration(foodcoop=app.instance, old_configuration_name=configuration, new_configuration_name=configuration_name)
     #     if renamed_configuration:
@@ -390,7 +397,7 @@ def save_configuration_edit(configuration, submitted_form):
 
 def del_configuration(submitted_form):
     global app
-    configuration_to_delete = submitted_form.get('delete configuration')
+    configuration_to_delete = submitted_form.getunicode('delete configuration')
     success, feedback = base.delete_configuration(app.instance, configuration_to_delete)
     if success:
         app.messages.append(configuration_to_delete + " erfolgreich gelöscht.")
@@ -412,10 +419,10 @@ def new_instance_page(submitted_form=None):
     url_value = ""
     locale_value = ""
     if submitted_form:
-        name_value = submitted_form.get("new instance name")
-        description_value = submitted_form.get("description")
-        url_value = submitted_form.get("foodsoft url")
-        locale_value = submitted_form.get("locale")
+        name_value = submitted_form.getunicode("new instance name")
+        description_value = submitted_form.getunicode("description")
+        url_value = submitted_form.getunicode("foodsoft url")
+        locale_value = submitted_form.getunicode("locale")
 
     locale_options = ""
     available_locales = base.find_available_locales()
@@ -580,7 +587,7 @@ def do_main(fc):
         app = App()
         app.instance = None
         app.messages.append("Logout erfolgreich.")
-        request_path = submitted_form.get("request_path")
+        request_path = submitted_form.getunicode("request_path")
         if request_path:
             return login_page(fc, request_path)
         else:
@@ -619,7 +626,7 @@ def display_run(fc, configuration, run_name):
         path = run_path(configuration, run_name)
         run = script.ScriptRun.load(path=path)
         if "method" in submitted_form:
-            method = submitted_form.get('method')
+            method = submitted_form.getunicode('method')
             parameters = {}
             # script_method = getattr(script, method)
             script_method = [sm for sm in run.next_possible_methods if sm.name == method][0]
@@ -637,7 +644,7 @@ def display_run(fc, configuration, run_name):
                         if file_object:
                             value = file_object.file
                     else:
-                        value = submitted_form.get(ipt.name)
+                        value = submitted_form.getunicode(ipt.name)
                     if value:
                         parameters[ipt.name] = value
             func = getattr(run, method)
@@ -685,7 +692,7 @@ def download(filename):
     if check_login(submitted_form, fc):
         return bottle.static_file(filename, root="", download=filename)
     else:
-        return login_page(fc=fc, request_path=submitted_form.get("origin"))
+        return login_page(fc=fc, request_path=submitted_form.getunicode("origin"))
 
 @app.route("/templates/styles.css")
 def send_css(filename='styles.css'):

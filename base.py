@@ -160,7 +160,7 @@ def save_config(foodcoop, configuration, config):
     os.makedirs(config_path, exist_ok=True)
     filename = os.path.join(config_path, "config.yaml")
     with open(filename, "w", encoding="UTF8") as yaml_file:
-        yaml.dump(config, yaml_file, allow_unicode=True, indent=4, sort_keys=False)
+        yaml.safe_dump(config, yaml_file, allow_unicode=True, indent=4, sort_keys=False)
 
 def set_config_detail(foodcoop, configuration, detail, value):
     config = read_config(foodcoop, configuration)
@@ -212,7 +212,7 @@ def read_settings(foodcoop):
     os.makedirs(settings_path, exist_ok=True)
     filename = os.path.join(settings_path, "settings.yaml")
     if os.path.isfile(filename):
-        with open(filename) as yaml_file:
+        with open(filename, encoding="UTF8") as yaml_file:
             settings = yaml.safe_load(yaml_file)
     else:
         settings = {
@@ -226,8 +226,8 @@ def save_settings(foodcoop, settings):
     settings_path = os.path.join("data", foodcoop)
     os.makedirs(settings_path, exist_ok=True)
     filename = os.path.join(settings_path, "settings.yaml")
-    with open(filename, "w") as yaml_file:
-        yaml.dump(settings, yaml_file, allow_unicode=True, indent=4, sort_keys=False)
+    with open(filename, "w", encoding="UTF8") as yaml_file:
+        yaml.safe_dump(settings, yaml_file, allow_unicode=True, indent=4, sort_keys=False)
 
 def set_setting(foodcoop, setting, value):
     settings = read_settings(foodcoop)

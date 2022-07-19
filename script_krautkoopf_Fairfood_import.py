@@ -13,6 +13,7 @@ from decimal import *
 import base
 import foodsoft_article
 import foodsoft_article_import
+import vat
 
 # Inputs this script's methods take
 email = base.Input(name="email", required=False, input_format="email", example="example@foo.test")
@@ -26,8 +27,8 @@ mark_as_imported = base.ScriptMethod(name="mark_as_imported")
 def config_variables(): # List of the special config variables this script uses, whether they are required and how they could look like
     return [
         base.Variable(name="Foodsoft supplier ID", required=False, example=12),
-        base.Variable(name="last imported CSV", required=False, example="2021-10-27_1"),
-        base.Variable(name="VAT on B2B articles", required=False, example=7, description="in percent"),
+        base.Variable(name="last imported run", required=False, example="2021-10-27_1"),
+        base.Variable(name="country of destination", required=True, example="AT", description="country in which the goods will be delivered (important for VAT calculation)"),
         base.Variable(name="categories to ignore", required=False, example=['Werbematerialien', 'Sparpakete']),
         base.Variable(name="products to ignore", required=False, example=[3, 51]),
         base.Variable(name="articles to ignore", required=False, example=[6700000008, 6700000016]),
@@ -132,10 +133,8 @@ class ScriptRun(base.Run):
     def parse_articles(self, driver, config, xml, shop="b2c"):
         rss_articles = ET.fromstring(xml)
         ns = {'g': 'http://base.google.com/ns/1.0'}
-        if shop == "b2c":
-            vat = 0
-        else:
-            vat = base.read_in_config(config, "VAT on B2B articles", 0)
+        recipient_vat = vat.reduced(base.read_in_config(config, "country of destination"))
+        original_vat = vat.reduced("de")
         for item in rss_articles.findall('./channel/item'):
             if item.find('g:availability', ns).text == "in stock":
                 try:
@@ -154,6 +153,8 @@ class ScriptRun(base.Run):
                 name = item.find('title').text.replace("&amp;", "&").replace("gross", "groß").replace("Natur", "natur").replace("Geröstet", "geröstet").replace("Gesalzen", "gesalzen").replace("Süss-", "süß-").replace("Im ", "im ").replace(" Getrocknet &", "").replace(" getrocknet", "").replace(" Getrocknet", "").replace("Entsteint", "entsteint")
                 orig_unit = item.find('g:unit_pricing_measure', ns).text.replace("none", "x").replace("eur", "Euro")
                 price = float(item.find('g:price', ns).text.replace(" EUR", "").replace(",", ".").replace("&quot;", '"'))
+                if shop == "b2c":
+                    price = price / (1.0 + original_vat / 100) # calculating net price
                 product_number = int(item.find('g:item_group_id', ns).text)
                 if product_number in [p.number for p in category.subcategories]: # check only in category.subcategories
                     product = [p for p in category.subcategories if p.number == product_number][0]
@@ -210,7 +211,7 @@ class ScriptRun(base.Run):
                 item_id = item.find('g:id', ns).text
                 if int(item_id) in self.articles_to_ignore:
                     if not [article for article in self.ignored_articles if article.order_number == int(item_id)]:
-                        self.ignored_articles.append(foodsoft_article.Article(order_number=int(item_id), name=name, unit=orig_unit, price_net=price, vat=vat))
+                        self.ignored_articles.append(foodsoft_article.Article(order_number=int(item_id), name=name, unit=orig_unit, price_net=price, vat=recipient_vat))
                     continue
                 order_number = f'{shop}_{item_id}'
                 if product_type in ["Nussmix", "Trockenfrüchte", "Nussmus", "Sparpakete", "Geschenke", "Schnelle Nussküche", "Haferdrink", "Cashew-Käse"]:
@@ -234,7 +235,7 @@ class ScriptRun(base.Run):
                 elif "Cashewrella" in name:
                     product.note = "Mozzarella-Alternative"
                 content = self.parse_unit_to_parcels(orig_unit)
-                offer = Offer(shop=shop, item_id=item_id, name=name, content=content, orig_unit=orig_unit, price=price, vat=vat, description=description, category_name=category.name)
+                offer = Offer(shop=shop, item_id=item_id, name=name, content=content, orig_unit=orig_unit, price=price, vat=recipient_vat, description=description, category_name=category.name)
                 product.offers.append(offer)
 
     def login(self, driver, email, password):
@@ -344,7 +345,7 @@ class Offer:
                 else:
                     unit = f"{self.content.amount}g"
                     price = self.price
-                    if "Pfandglas" in self.name or (self.category_name in ["Nussmus", "Haferdrink"] and self.content.amount < 400):
+                    if "Pfandglas" in self.name or (self.category_name in ["Nussmus", "Haferdrink", "Nussige Schokocremes"] and self.content.amount < 400):
                         unit += " MW-Glas"
                         self.name = self.name.split("(")[0] + "- Glas einzeln"
                     elif self.category_name != "Cashew-Käse":
@@ -356,7 +357,7 @@ class Offer:
                 unit = f"{self.content.content.amount}g"
                 unit_quantity = self.content.amount
                 price = self.price / unit_quantity
-                if "Pfandglas" in self.name or self.category_name in ["Nussmus", "Haferdrink"]:
+                if "Pfandglas" in self.name or self.category_name in ["Nussmus", "Haferdrink", "Nussige Schokocremes"]:
                     unit += " MW-Glas"
                     self.name = self.name.split("(")[0] + "- Glas"
             else:

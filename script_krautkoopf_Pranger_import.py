@@ -217,7 +217,7 @@ def get_articles(category, articles, ignored_articles, articles_to_ignore):
             producer = get_if_found(item, "ic2 producer")
             note = get_if_found(item, "ic2 cinfotxt").replace("/Pkg.", "").replace(" Inhaltfüllung", "")
             origin = ""
-            if producer == "Landwirtschaft Pranger" or producer == "Produktion Biohof A. Pranger e.U.":
+            if producer == "Landwirtschaft Pranger" or producer == "Produktion Biohof A. Pranger e.U." or producer == "Von unserem Biohof":
                 origin = "eigen"
             else:
                 address = get_if_found(item_details, "oo-producer-address")
@@ -264,14 +264,19 @@ def get_articles(category, articles, ignored_articles, articles_to_ignore):
             # Krautkoopf-specific way of finding the best fitting unit/price option for us
             favorite_option = None
             piece_options = [x for x in prices if x.unit == "Stück" or x.unit == "Traube" or "Stk" in x.unit]
-            if len(prices) == 1:
-                if base_unit == "kg" and prices[0].unit not in ["kg", "1kg", "Kg"]:
-                    name += baseprice_suffix(base_price, base_unit)
-            elif piece_options:
+            if piece_options:
                 favorite_option = piece_options[0]
                 if base_unit == "kg":
                     name += baseprice_suffix(base_price, base_unit)
+            elif item.find(id="item_entry").attrs["value"] == "1.0":
+                half_kg_option = PriceOption(price=base_price / 2, unit="500g")
+                prices.append(half_kg_option)
+                favorite_option = half_kg_option
+            elif len(prices) == 1:
+                if base_unit == "kg" and prices[0].unit not in ["kg", "1kg", "Kg"]:
+                    name += baseprice_suffix(base_price, base_unit)
             else:
+                print("Uncovered case in case analysis!")
                 prices.sort(key=lambda x: x.price)
                 other_options = [x for x in prices if x.unit != base_unit]
                 if base_unit == "kg" and other_options:
@@ -279,6 +284,7 @@ def get_articles(category, articles, ignored_articles, articles_to_ignore):
                         half_kg_option = PriceOption(price=base_price / 2, unit="500g")
                         prices.append(half_kg_option)
                         favorite_option = half_kg_option
+                        name += baseprice_suffix(base_price, base_unit)
             if not favorite_option:
                 kg_options = [x for x in prices if x.unit == "kg"]
                 if kg_options:
