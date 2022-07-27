@@ -87,7 +87,19 @@ def compare_string(article, article_from_last_run, article_from_foodsoft, string
             setattr(article, string_type, manual_string)
     return article, configuration_config
 
-def compare_manual_changes(foodcoop, supplier, supplier_id, articles, foodsoft_connector=None, notifications=None, compare_name=True, compare_note=True, compare_manufacturer=True, compare_origin=True, compare_unit=True, compare_price=True, compare_vat=False, compare_deposit=False, compare_unit_quantity=False, compare_category=True):
+def get_articles_from_foodsoft(supplier_id, foodsoft_connector=None, version_delimiter=None):
+    # Connect to your Foodsoft instance and download the articles CSV of the supplier
+    if foodsoft_connector and supplier_id:
+        # fsc = foodsoft.FSConnector(url=foodsoft_url, user=foodsoft_user, password=foodsoft_password)
+        csv_from_foodsoft = csv.reader(foodsoft_connector.get_articles_CSV(supplier_id=supplier_id).splitlines(), delimiter=';')
+        # fsc.logout()
+        articles_from_foodsoft = foodsoft_article.read_articles_from_csv(csv=csv_from_foodsoft, version_delimiter=version_delimiter)
+    else:
+        articles_from_foodsoft = []
+        notifications.append("ACHTUNG: Abgleichen der manuellen Änderungen in der Foodsoft fehlgeschlagen, da Foodsoft-Connector fehlt!")
+    return articles_from_foodsoft
+
+def compare_manual_changes(foodcoop, supplier, articles, articles_from_foodsoft, version_delimiter=None, notifications=None, compare_name=True, compare_note=True, compare_manufacturer=True, compare_origin=True, compare_unit=True, compare_price=True, compare_vat=False, compare_deposit=False, compare_unit_quantity=False, compare_category=True):
     """
     This is an optional method which checks if article data has been modified manually in Foodsoft after the last CSV was created.
     In case the article data in the source did not change since the last run of the script and the article data from your Foodsoft instance differs, latter is adopted.
@@ -101,16 +113,6 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, foodsoft_c
     if "manual changes" not in configuration_config:
         configuration_config["manual changes"] = {}
 
-    # Connect to your Foodsoft instance and download the articles CSV of the supplier
-    if foodsoft_connector and supplier_id:
-        # fsc = foodsoft.FSConnector(url=foodsoft_url, user=foodsoft_user, password=foodsoft_password)
-        csv_from_foodsoft = csv.reader(foodsoft_connector.get_articles_CSV(supplier_id=supplier_id).splitlines(), delimiter=';')
-        # fsc.logout()
-        articles_from_foodsoft = foodsoft_article.read_articles_from_csv(csv_from_foodsoft)
-    else:
-        articles_from_foodsoft = []
-        notifications.append("ACHTUNG: Abgleichen der manuellen Änderungen in der Foodsoft fehlgeschlagen, da Foodsoft-Connector fehlt!")
-
     # Get the last CSV created by the script
     last_imported_run_name = base.read_in_config(configuration_config, "last imported run", "")
     last_imported_csv = None
@@ -123,7 +125,7 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, foodsoft_c
         notifications.append("It was assumed '" + last_imported_csv + "' was the last CSV imported into Foodsoft.")
         with open(last_imported_csv, newline='', encoding='utf-8') as csvfile:
             last_csv_opened = csv.reader(csvfile, delimiter=';')
-            articles_from_last_run = foodsoft_article.read_articles_from_csv(last_csv_opened)
+            articles_from_last_run = foodsoft_article.read_articles_from_csv(csv=last_csv_opened, version_delimiter=version_delimiter)
 
     # Compare for each article the newly readout data, the data from Foodsoft, and the data from the last run
     for article in articles:
@@ -172,11 +174,33 @@ def compare_manual_changes(foodcoop, supplier, supplier_id, articles, foodsoft_c
 
     return articles, notifications
 
+def version_articles(articles, articles_from_foodsoft, version_delimiter, compare_name=True, compare_unit=True, compare_unit_quantity=True):
+    """
+    Check if name, unit, and unit quantity would be altered when importing CSV. If so, mark the article as a new version.
+    """
+    for article in articles:
+        make_new_version = False
+        article_from_foodsoft_list = [a for a in articles_from_foodsoft if a.order_number == article.order_number]
+        if article_from_foodsoft_list:
+            article_from_foodsoft = article_from_foodsoft_list[0]
+            if compare_name:
+                if article.name != article_from_foodsoft.name:
+                    make_new_version = True
+            if compare_unit and not make_new_version:
+                if article.unit != article_from_foodsoft.unit:
+                    make_new_version = True
+            if compare_unit_quantity and not make_new_version:
+                if article.unit_quantity != article_from_foodsoft.unit_quantity:
+                    make_new_version = True
+        if make_new_version:
+            article.version = article_from_foodsoft.version + 1
+    return articles
+
 def validate_string(string, string_type, article, notifications):
     """
     Check if unit, name, and other strings exceed the respective character limit, and shorten them if so
     """
-    string = str(string)
+    string = base.remove_double_strings_loop(text=str(string), string=" ", description="whitespaces") # remove unnecessary whitespaces
     if string_type != "unit" and string_type != "name": # Units and names could also be shortened, but Foodsoft will validate them, so it's not necessary.
         max_length = 255
         abort_string = "..."
@@ -190,7 +214,7 @@ def validate_string(string, string_type, article, notifications):
     string.replace(';', ',')
     return string, notifications
 
-def get_data_from_articles(articles, notifications):
+def get_data_from_articles(articles, notifications, version_delimiter=None):
     """
     Transform instances of 'article' class into a table which can be written as a CSV
     """
@@ -201,7 +225,11 @@ def get_data_from_articles(articles, notifications):
         if not article.available:
             avail = 'x'
 
-        order_number, notifications = validate_string(article.order_number, 'order number', article, notifications)
+        order_number_string = article.order_number
+        if version_delimiter and article.version != 1:
+            order_number_string = version_delimiter.join([str(article.order_number), str(article.version)])
+
+        order_number, notifications = validate_string(order_number_string, 'order number', article, notifications)
         name, notifications = validate_string(article.name, 'name', article, notifications)
         note, notifications = validate_string(article.note, 'note', article, notifications)
         manufacturer, notifications = validate_string(article.manufacturer, 'manufacturer', article, notifications)
@@ -247,11 +275,11 @@ def compose_articles_csv_message(supplier, foodsoft_url=None, supplier_id=None, 
             text += "\n- " + notification
     return text
 
-def write_articles_csv(file_path, articles, notifications=None):
+def write_articles_csv(file_path, articles, version_delimiter=None, notifications=None):
     if not notifications:
         notifications = []
     
-    rows, notifications = get_data_from_articles(articles=articles, notifications=notifications)
+    rows, notifications = get_data_from_articles(articles=articles, notifications=notifications, version_delimiter=version_delimiter)
 
     with open(file_path + '.csv', 'w', encoding='UTF8', newline='') as f:
         writer = csv.writer(f, delimiter=';')

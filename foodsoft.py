@@ -10,6 +10,19 @@ import urllib.request
 
 logging.basicConfig(level=logging.DEBUG)
 
+class Supplier:
+    def __init__(self, name, address, description="", category="", custom_fields=None, latitude=None, longitude=None, icon=None, icon_prefix=None, icon_color=None):
+        self.name = name
+        self.address = address
+        self.description = description
+        self.category = category
+        self.custom_fields = custom_fields
+        self.latitude = latitude
+        self.longitude = longitude
+        self.icon = icon
+        self.icon_prefix = icon_prefix
+        self.icon_color = icon_color
+
 def read_foodsoft_config():
     foodcoop = "unnamed foodcoop"
     foodsoft_url = None
@@ -143,3 +156,31 @@ class FSConnector:
         request = self._get(supplier_url, self._default_header)
         decoded_content = request.content.decode('utf-8')
         return decoded_content
+
+    def get_supplier_data(self, custom_fields=None, exclude_categories=None):
+        suppliers = []
+        supplier_ids = []
+        supplier_list_url = f"{self._url}suppliers"
+        parsed_html = bs(self._get(supplier_list_url, self._default_header).content, 'html.parser')
+        for row in parsed_html.body.find("tbody").find_all("tr"):
+            supplier_ids.append(row.find_all("td")[0].find("a").get("href").split("suppliers/")[-1])
+        for supplier_id in supplier_ids:
+            supplier = self.get_data_of_supplier(supplier_id=supplier_id, custom_fields=custom_fields, exclude_categories=exclude_categories)
+            if supplier:
+                suppliers.append(supplier)
+
+        return suppliers
+
+    def get_data_of_supplier(self, supplier_id, custom_fields=None, exclude_categories=None):
+        supplier_url = f"{self._url}suppliers/{str(supplier_id)}/edit"
+        parsed_html_body = bs(self._get(supplier_url, self._default_header).content, 'html.parser').body
+        category = parsed_html_body.find(id="supplier_supplier_category_id").select_one('option:checked').text # rewrite so it doesn't crash if no category selected
+        if category in exclude_categories:
+            return None
+        name = parsed_html_body.find(id="supplier_name").get("value")
+        address = parsed_html_body.find(id="supplier_address").get("value")
+        custom_fields = []
+        for cf in custom_fields:
+            custom_fields.append(parsed_html_body.find(id=f"supplier_custom_fields_{cf.name}")) # doesn't work yet in Foodsoft, it seems
+
+        return Supplier(name=name, address=address, category=category, custom_fields=custom_fields)

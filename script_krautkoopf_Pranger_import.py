@@ -60,8 +60,11 @@ class ScriptRun(base.Run):
         self.notifications = []
         config = base.read_config(self.foodcoop, self.configuration)
         supplier_id = base.read_in_config(config, "Foodsoft supplier ID", None)
-        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(foodcoop=self.foodcoop, supplier=self.configuration, supplier_id=supplier_id, articles=self.articles, foodsoft_connector=session.foodsoft_connector, notifications=self.notifications)
-        self.notifications = foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
+        version_delimiter = "_v"
+        articles_from_foodsoft = foodsoft_article_import.get_articles_from_foodsoft(supplier_id=supplier_id, foodsoft_connector=session.foodsoft_connector, version_delimiter=version_delimiter)
+        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, version_delimiter=version_delimiter, notifications=self.notifications)
+        self.articles = foodsoft_article_import.version_articles(articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, version_delimiter=version_delimiter, compare_name=False)
+        self.notifications = foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, version_delimiter=version_delimiter, notifications=self.notifications)
         message_prefix = base.read_in_config(config, "message prefix", "")
         message = foodsoft_article_import.compose_articles_csv_message(supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_subcategories=self.ignored_subcategories, ignored_articles=self.ignored_articles, notifications=self.notifications, prefix=message_prefix)
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Zusammenfassung"), content=message)
@@ -78,9 +81,10 @@ class ScriptRun(base.Run):
         self.completion_percentage = 100
 
 class PriceOption:
-    def __init__(self, price, unit):
+    def __init__(self, price, unit, unit_quantity=1):
         self.price = price
         self.unit = unit
+        self.unit_quantity = unit_quantity
 
 def get_subcategories(cat_id, categories, ignored_subcategories, categories_to_ignore, subcategories_to_ignore):
     subcats = []
@@ -272,6 +276,10 @@ def get_articles(category, articles, ignored_articles, articles_to_ignore):
                 half_kg_option = PriceOption(price=base_price / 2, unit="500g")
                 prices.append(half_kg_option)
                 favorite_option = half_kg_option
+            elif prices[0].unit in ["kg", "1kg", "Kg"] and cat_name in ["Fruchtgemüse"]:
+                half_kg_option = PriceOption(price=base_price / 2, unit="500g", unit_quantity=2)
+                prices.append(half_kg_option)
+                favorite_option = half_kg_option
             elif len(prices) == 1:
                 if base_unit == "kg" and prices[0].unit not in ["kg", "1kg", "Kg"]:
                     name += baseprice_suffix(base_price, base_unit)
@@ -305,7 +313,7 @@ def get_articles(category, articles, ignored_articles, articles_to_ignore):
             note = base.remove_double_strings_loop(text=note, string=" ", description="whitespaces")
 
             cat_name = match_categories(name=name, note=note, category_number=subcat["number"], cat_name=cat_name)
-            article = foodsoft_article.Article(order_number=order_number, name=name, note=note, unit=favorite_option.unit, price_net=favorite_option.price, category=cat_name, manufacturer=producer, origin=origin, ignore=ignore, orig_unit=unit_info)
+            article = foodsoft_article.Article(order_number=order_number, name=name, note=note, unit=favorite_option.unit, price_net=favorite_option.price, unit_quantity=favorite_option.unit_quantity, category=cat_name, manufacturer=producer, origin=origin, ignore=ignore, orig_unit=unit_info)
             if int(order_number) in articles_to_ignore:
                 article.ignore = True
                 ignored_articles.append(article)

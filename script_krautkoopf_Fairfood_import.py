@@ -99,18 +99,14 @@ class ScriptRun(base.Run):
         self.completion_percentage = 33
 
     def generate_csv(self, session):
-        # TODO: compare manual changes
+        # TODO: test changes
         config = base.read_config(self.foodcoop, self.configuration)
-        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(foodcoop=self.foodcoop, supplier=self.configuration, supplier_id=self.supplier_id, articles=self.articles, foodsoft_connector=session.foodsoft_connector, notifications=self.notifications)
+        version_delimiter = "_v"
+        articles_from_foodsoft = foodsoft_article_import.get_articles_from_foodsoft(supplier_id=self.supplier_id, foodsoft_connector=session.foodsoft_connector, version_delimiter=version_delimiter)
+        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, version_delimiter=version_delimiter, notifications=self.notifications)
+        self.articles = foodsoft_article_import.version_articles(articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, version_delimiter=version_delimiter, compare_name=False)
         self.articles = sorted(self.articles, key=lambda x: x.name)
-        if base.read_in_config(config, "separate CSV for Cashewrella", True):
-            cashewrella_articles = [article for article in self.articles if article.category == "Cashew-Käse"]
-            fairfood_articles = [article for article in self.articles if article not in cashewrella_articles]
-            foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=fairfood_articles, notifications=self.notifications)
-            foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Cashewrella_Artikel_" + self.name), articles=cashewrella_articles, notifications=self.notifications)
-        else:
-            foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
-        
+        self.notifiations = foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
         message = foodsoft_article_import.compose_articles_csv_message(supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=self.supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_subcategories=self.ignored_products, ignored_articles=self.ignored_articles, notifications=self.notifications, prefix=base.read_in_config(config, "message prefix", ""))
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Zusammenfassung"), content=message)
 
@@ -176,8 +172,6 @@ class ScriptRun(base.Run):
                         origin_info = info_list.find_all(lambda tag: tag.name == "li" and ("Bio-Qualität aus " in tag.text or "Geerntet und getrocknet in " in tag.text or "Geknackt und verarbeitet in " in tag.text))
                         if origin_info:
                             product.origin = origin_info[0].text.replace("Bio-Qualität aus ", "").replace("Geerntet und getrocknet in ", "").replace("Geknackt und verarbeitet in ", "").replace("der ", "").replace("dem ", "").replace(", ", "/").replace(" und ", "/").strip()
-                        elif product_number == 88:
-                            product.origin = "Bodenseeregion"
                         else:
                             cooperative_links = [link for link in webpage.body.main.find_all("a", href=True) if "kooperative/" in link["href"]]
                             if cooperative_links:
@@ -214,7 +208,7 @@ class ScriptRun(base.Run):
                         self.ignored_articles.append(foodsoft_article.Article(order_number=int(item_id), name=name, unit=orig_unit, price_net=price, vat=recipient_vat))
                     continue
                 order_number = f'{shop}_{item_id}'
-                if product_type in ["Nussmix", "Trockenfrüchte", "Nussmus", "Sparpakete", "Geschenke", "Schnelle Nussküche", "Haferdrink", "Cashew-Käse"]:
+                if product_type in ["Nussmix", "Trockenfrüchte", "Nussmus", "Sparpakete", "Geschenke", "Schnelle Nussküche", "Haferdrink", "Cashew-Käse", "Nussige Schokocremes"]:
                     name = remove_prefix(name, product_type)
                 name_split_at_braces = name.split(" (")
                 if len(name_split_at_braces) > 1:
