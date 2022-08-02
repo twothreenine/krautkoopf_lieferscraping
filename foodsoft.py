@@ -7,16 +7,17 @@ import os
 import re
 from bs4 import BeautifulSoup as bs
 import urllib.request
+import copy
 
 logging.basicConfig(level=logging.DEBUG)
 
 class Supplier:
-    def __init__(self, name, address, description="", category="", custom_fields=None, latitude=None, longitude=None, icon=None, icon_prefix=None, icon_color=None):
+    def __init__(self, name, address, website="", category="", additional_fields=None, latitude=None, longitude=None, icon=None, icon_prefix=None, icon_color=None):
         self.name = name
         self.address = address
-        self.description = description
+        self.website = website
         self.category = category
-        self.custom_fields = custom_fields
+        self.additional_fields = additional_fields
         self.latitude = latitude
         self.longitude = longitude
         self.icon = icon
@@ -157,7 +158,7 @@ class FSConnector:
         decoded_content = request.content.decode('utf-8')
         return decoded_content
 
-    def get_supplier_data(self, custom_fields=None, exclude_categories=None):
+    def get_supplier_data(self, name_fields=None, address_fields=None, website_fields=None, category_fields=None, additional_fields=None, exclude_categories=None):
         suppliers = []
         supplier_ids = []
         supplier_list_url = f"{self._url}suppliers"
@@ -165,22 +166,44 @@ class FSConnector:
         for row in parsed_html.body.find("tbody").find_all("tr"):
             supplier_ids.append(row.find_all("td")[0].find("a").get("href").split("suppliers/")[-1])
         for supplier_id in supplier_ids:
-            supplier = self.get_data_of_supplier(supplier_id=supplier_id, custom_fields=custom_fields, exclude_categories=exclude_categories)
+            supplier = self.get_data_of_supplier(supplier_id=supplier_id, name_fields=name_fields, address_fields=address_fields, website_fields=website_fields, category_fields=category_fields, additional_fields=copy.deepcopy(additional_fields), exclude_categories=exclude_categories)
             if supplier:
                 suppliers.append(supplier)
 
         return suppliers
 
-    def get_data_of_supplier(self, supplier_id, custom_fields=None, exclude_categories=None):
+    def get_data_of_supplier(self, supplier_id, name_fields=None, address_fields=None, website_fields=None, category_fields=None, additional_fields=None, exclude_categories=None):
         supplier_url = f"{self._url}suppliers/{str(supplier_id)}/edit"
         parsed_html_body = bs(self._get(supplier_url, self._default_header).content, 'html.parser').body
-        category = parsed_html_body.find(id="supplier_supplier_category_id").select_one('option:checked').text # rewrite so it doesn't crash if no category selected
-        if category in exclude_categories:
-            return None
-        name = parsed_html_body.find(id="supplier_name").get("value")
-        address = parsed_html_body.find(id="supplier_address").get("value")
-        custom_fields = []
-        for cf in custom_fields:
-            custom_fields.append(parsed_html_body.find(id=f"supplier_custom_fields_{cf.name}")) # doesn't work yet in Foodsoft, it seems
+        category = None
+        if category_fields:
+            for field in category_fields:
+                category = parsed_html_body.find(id=f"supplier_{field}").select_one('option:checked').text # rewrite so it doesn't crash if no category selected
+                if category:
+                    if exclude_categories:
+                        if category in exclude_categories:
+                            return None
+                    break
+        name = self.get_supplier_field_data(parsed_html_body=parsed_html_body, fields=name_fields)
+        address = self.get_supplier_field_data(parsed_html_body=parsed_html_body, fields=address_fields)
+        website = self.get_supplier_field_data(parsed_html_body=parsed_html_body, fields=website_fields)
+        if additional_fields:
+            for af in additional_fields:
+                value = self.get_supplier_field_data(parsed_html_body=parsed_html_body, fields=af.get("foodsoft field(s)"))
+                if value:
+                    af["value"] = value
 
-        return Supplier(name=name, address=address, category=category, custom_fields=custom_fields)
+        print(f"{name}: {additional_fields}")
+        return Supplier(name=name, address=address, website=website, category=category, additional_fields=additional_fields)
+
+    def get_supplier_field_data(self, parsed_html_body, fields):
+        # checks each field in a list of fields for data and returns the first non-null value
+        if fields:
+            for field in fields:
+                field = parsed_html_body.find(id=f"supplier_{field}")
+                if field.name == "textarea":
+                    field_value = field.text[1:] #get("value")
+                else:
+                    field_value = field.get("value")
+                if field_value:
+                    return field_value
