@@ -28,11 +28,19 @@ beautifulsoup4
 
 requests v2.24+
 
+natsort 8.1.0+
+
 bottle v0.12+ (for web interface)
 
 babel (for web interface)
 
-selenium (for Fairfood script)
+webdriver-manager 3.5.3+ (for Fairfood script)
+
+selenium 4.1.3+ (for Fairfood script)
+
+geopy 2.2.0+ (for supplier map script)
+
+folium 0.12.1.post1+ (for supplier map script)
 
 ## Details
 Da es in unserer Foodcoop Bedarf gab, den regelmäßigen Aufwand für das Bestellteam zu senken, habe ich ein Python-Skript geschrieben, das sämtliche Artikel einer bestimmten Lieferant_in ausliest (z.B. per Screenscraping aus dem Webshop, aus einer Exceltabelle wäre aber auch denkbar) und daraus eine CSV generiert, die in die Foodsoft importiert werden kann.
