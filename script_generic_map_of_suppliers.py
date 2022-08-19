@@ -27,6 +27,7 @@ def config_variables(): # List of the special config variables this script uses,
     return [
         base.Variable(name="map center", required=False, example='Foodcoopstadt, 1234 Beispielland'),
         base.Variable(name="default zoom", required=False, example=11),
+        base.Variable(name="scroll wheel zoom", required=False, example=False),
         base.Variable(name="tiles", required=False, example="OpenStreetMap"),
         base.Variable(name="foodcoop addresses", required=False, example={'Foodcoop home': {'description': 'bla blub', 'address': 'Beispielgasse 1, 1234 Beispielland', 'icon': 'home', 'icon-prefix': '', 'icon-color': ''}}, description="One or multiple addresses of the foodcoop itself"),
         base.Variable(name="supplier name prefix delimiters", required=False, example=[') ', '] ']),
@@ -105,8 +106,8 @@ class ScriptRun(base.Run):
         else:
             pass # TODO: what to do?
 
-        our_map = folium.Map(location=[map_center.latitude, map_center.longitude], zoom_start=base.read_in_config(config, "default zoom", 11), tiles=base.read_in_config(config, "tiles", "OpenStreetMap"))
-
+        scroll_wheel_zoom = base.read_in_config(config, "scroll wheel zoom", False)
+        our_map = folium.Map(location=[map_center.latitude, map_center.longitude], zoom_start=base.read_in_config(config, "default zoom", 11), scrollWheelZoom=scroll_wheel_zoom, tiles=base.read_in_config(config, "tiles", "OpenStreetMap"))
         plugins.Fullscreen().add_to(our_map)
 
         for fc_address in foodcoop_addresses:
