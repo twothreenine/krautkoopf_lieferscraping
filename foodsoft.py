@@ -115,6 +115,7 @@ class FSConnector:
     def add_user_data(self, first_name=True, last_name=True, nick=False, workgroups=False, ordergroup=False):
         """
         Adds the requested data of the logged-in user to the FSConnector object:
+        .user : ID of user
         .first_name
         .last_name
         .nick (None if nicknames are disabled in the Foodsoft instance)
@@ -129,6 +130,7 @@ class FSConnector:
             self._session.close()
             self._session = None
         else:
+            self.user = int(parsed_html.body.find(class_="simple_form form-horizontal edit_user").get("id").split("edit_user_")[-1])
             if first_name:
                 self.first_name = first_name_field.get("value")
             if last_name:
