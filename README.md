@@ -42,6 +42,12 @@ geopy 2.2.0+ (for supplier map script)
 
 folium 0.12.1.post1+ (for supplier map script)
 
+openpyxl 3.0.10+ (for Apfelland & HolperHof scripts)
+
+tabula-py 2.5.1+ (for Lebenbauer & Renner scripts)
+
+pandas 1.5.0+ (for Lebenbauer & Renner scripts)
+
 ## Details
 Da es in unserer Foodcoop Bedarf gab, den regelmäßigen Aufwand für das Bestellteam zu senken, habe ich ein Python-Skript geschrieben, das sämtliche Artikel einer bestimmten Lieferant_in ausliest (z.B. per Screenscraping aus dem Webshop, aus einer Exceltabelle wäre aber auch denkbar) und daraus eine CSV generiert, die in die Foodsoft importiert werden kann.
 Das Screenscraping bzw. Tabelle-auslesen muss natürlich je nach Lieferant/Webshop angepasst bzw. neu geschrieben werden, einige Funktionen (wie das Generieren der CSV) sind jedoch ausgelagert in „base“ und von allen Skripten abrufbar.
