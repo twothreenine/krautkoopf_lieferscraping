@@ -92,16 +92,41 @@ class Category:
         else:
             self.subcategories = []
 
-def equal_strings_check(list1, list2):
-    # compares strings of two lists case-insensitively for matches
-    matches = False
-    compare_list1 = [string.casefold().strip() for string in list1]
-    compare_list2 = [string.casefold().strip() for string in list2]
+def prepare_string_for_comparison(string, case_sensitive, strip):
+    if not case_sensitive:
+        string = string.casefold()
+    if strip:
+        string = string.strip()
+    return string
+
+def equal_strings_check(list1, list2, case_sensitive=False, strip=True):
+    # compares strings of two lists for matches and returns list of matching strings of list1
+    matches = []
+    compare_list1 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list1]
+    compare_list2 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list2]
+
     for string in compare_list1:
         if string in compare_list2:
-            matches = True
-            break
+            matches.append(string)
     return matches
+
+def containing_strings_check(list1, list2, case_sensitive=False, strip=True):
+    # checks if strings of list1 appear in any string of list2 and returns list of matching strings of list1
+    matches = []
+    compare_list1 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list1]
+    compare_list2 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list2]
+
+    for string in compare_list1:
+        for query_string in compare_list2:
+            if query_string in string:
+                matches.append(string)
+    return matches
+
+def replace_in_string(string: str, strings_to_replace: dict) -> str:
+    # strings_to_replace must be a dictionary of {"string to replace": "by another string"}
+    for string_tuple in strings_to_replace.items():
+        string = string.replace(string_tuple[0], string_tuple[1])
+    return string
 
 def remove_double_strings_loop(text, string, description=None, number_of_runs=100):
     loop_count = 0

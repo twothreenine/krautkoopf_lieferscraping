@@ -96,7 +96,8 @@ def get_articles_from_foodsoft(supplier_id, foodsoft_connector=None, version_del
         articles_from_foodsoft = foodsoft_article.read_articles_from_csv(csv=csv_from_foodsoft, version_delimiter=version_delimiter)
     else:
         articles_from_foodsoft = []
-        notifications.append("ACHTUNG: Abgleichen der manuellen Änderungen in der Foodsoft fehlgeschlagen, da Foodsoft-Connector fehlt!")
+        warning = "ACHTUNG: Abgleichen der manuellen Änderungen in der Foodsoft fehlgeschlagen, da Foodsoft-Connector fehlt!"
+        print(warning)
     return articles_from_foodsoft
 
 def compare_manual_changes(foodcoop, supplier, articles, articles_from_foodsoft, version_delimiter=None, notifications=None, compare_name=True, compare_note=True, compare_manufacturer=True, compare_origin=True, compare_unit=True, compare_price=True, compare_vat=False, compare_deposit=False, compare_unit_quantity=False, compare_category=True):
@@ -241,7 +242,7 @@ def get_data_from_articles(articles, notifications, version_delimiter=None):
 
     return rows, notifications
 
-def compose_articles_csv_message(supplier, foodsoft_url=None, supplier_id=None, categories=[], ignored_categories=[], ignored_subcategories=[], ignored_articles=[], notifications=[], prefix=""):
+def compose_articles_csv_message(supplier, foodsoft_url=None, supplier_id=None, categories=None, ignored_categories=None, ignored_subcategories=None, ignored_articles=None, notifications=None, prefix=""):
     text = ""
     if prefix:
         text += prefix + "\n\n"
