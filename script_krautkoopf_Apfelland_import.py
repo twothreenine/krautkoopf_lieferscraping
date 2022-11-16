@@ -1,3 +1,7 @@
+"""
+Script for converting a XLSX price list from Biohof Schweighofer, A-8211 Schirnitz into a CSV file for upload into Foodsoft.
+"""
+
 import importlib
 import openpyxl
 
@@ -39,6 +43,8 @@ class ScriptRun(base.Run):
         articles_to_ignore_exact = config.get("ignore articles by name (exact, case-sensitive)", [])
         articles_to_ignore_containing = config.get("ignore articles by name (containing, case-insensitive)", [])
         strings_to_replace_in_article_name = config.get("strings to replace in article name", {})
+        recalculate_units = config.get("recalculate units", {})
+        prefix_delimiter = "_"
         self.categories = []
         self.articles = []
         self.ignored_categories = []
@@ -88,26 +94,22 @@ class ScriptRun(base.Run):
                             deposit = float(article_row[7]["value"].split("/")[0].replace(",", ".").replace("-", "").replace("€", "").strip())
                             deposit_str = "{:.2f}".format(deposit).replace(".", ",")
                             note = f"inkl. {deposit_str} € Pfand"
-                        if "Obst/" in category.name or "Getreide" in category.name:
-                            if unit in ["1kg", "1 kg", "kg"]:
-                                unit = "500g"
-                                price /= 2
-                        article_hash = hash(f"{original_name}{unit}")
-                        order_number = f"{str(self.categories.index(category)).zfill(2)}{str(article_hash)}"
 
-                        article = foodsoft_article.Article(order_number=order_number, name=name, note=note, unit=unit, price_net=price, category=category.name.split("/")[0], deposit=deposit, orig_unit=unit)
+                        article = foodsoft_article.Article(order_number="", name=name, note=note, unit=unit, price_net=price, category=category.name.split("/")[0], deposit=deposit, orig_unit=unit)
+                        articles = foodsoft_article_import.recalculate_unit_for_article(article=article, category_names=[category.name], recalculate_units=recalculate_units) # convert to e.g. 500g unit (multiple units possible)
+                        for a in articles:
+                            a.order_number = f"{str(self.categories.index(category)).zfill(2)}{prefix_delimiter}{a.name}_{a.unit}"
+                            if base.equal_strings_check(list1=[name, original_name], list2=articles_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[name, original_name], list2=articles_to_ignore_containing, case_sensitive=False, strip=False):
+                                self.ignored_articles.append(a)
+                            else:
+                                self.articles.append(a)
 
-                        if base.equal_strings_check(list1=[name, original_name], list2=articles_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[name, original_name], list2=articles_to_ignore_containing, case_sensitive=False, strip=False):
-                            self.ignored_articles.append(article)
-                        else:
-                            self.articles.append(article)
-
-        self.articles = foodsoft_article_import.rename_duplicates(self.articles)
-        articles_from_foodsoft = foodsoft_article_import.get_articles_from_foodsoft(supplier_id=supplier_id, foodsoft_connector=session.foodsoft_connector)
-        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, notifications=self.notifications)
-        self.notifications = foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
+        self.articles, self.notifications = foodsoft_article_import.rename_duplicates(locales=session.locales, articles=self.articles, notifications=self.notifications)
+        articles_from_foodsoft, self.notifications = foodsoft_article_import.get_articles_from_foodsoft(locales=session.locales, supplier_id=supplier_id, foodsoft_connector=session.foodsoft_connector, notifications=self.notifications)
+        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(locales=session.locales, foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, notifications=self.notifications)
+        self.notifications = foodsoft_article_import.write_articles_csv(locales=session.locales, file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
         message_prefix = config.get("message prefix", "")
-        message = foodsoft_article_import.compose_articles_csv_message(supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_articles=self.ignored_articles, notifications=self.notifications, prefix=message_prefix)
+        message = foodsoft_article_import.compose_articles_csv_message(locales=session.locales, supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_articles=self.ignored_articles, notifications=self.notifications, prefix=message_prefix)
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Zusammenfassung"), content=message)
 
         self.next_possible_methods = [mark_as_imported]
@@ -115,6 +117,8 @@ class ScriptRun(base.Run):
         self.log.append(base.LogEntry(action="price list converted", done_by=base.full_user_name(session)))
 
     def mark_as_imported(self, session):
+        base.set_config_detail(foodcoop=self.foodcoop, configuration=self.configuration, detail="last imported run", value=self.name)
+
         self.next_possible_methods = []
         self.completion_percentage = 100
         self.log.append(base.LogEntry(action="marked as imported", done_by=base.full_user_name(session)))

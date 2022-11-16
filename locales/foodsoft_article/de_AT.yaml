@@ -1,0 +1,15 @@
+order_number: Bestellnummer
+name: Name
+unit: Einheit
+price_net: Nettopreis
+available: verfügbar
+note: Notiz
+manufacturer: Produzent
+origin: Herkunft
+vat: USt
+deposit: Pfand
+unit_quantity: Gebindegröße
+category: Kategorie
+orig_unit: Originaleinheit
+by (supplier): von
+from (origin): aus

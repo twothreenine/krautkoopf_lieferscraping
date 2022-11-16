@@ -6,14 +6,14 @@ message prefix:
 ignore articles by name (exact, case-sensitive):
     name: Ignoriere Artikel per Name (exakt, Groß-/Kleinschreibung-unterscheidend)
 ignore articles by name (containing, case-insensitive):
-    name: Ignoriere Artikel per Name (enthaltend, schreibungsunabhängig)
+    name: Ignoriere Artikel per Name (enthalten, schreibungsunabhängig)
     description: in Kleinbuchstaben eintragen
 strings to replace in article name:
     name: Zeichenfolgen, die im Artikelnamen ersetzt werden sollen
 piece articles (exact, case-sensitive):
     name: Stückartikel (exakt, Groß-/Kleinschreibung-unterscheidend)
 piece articles (containing, case-insensitive):
-    name: Stückartikel (enthaltend, schreibungsunabhängig)
+    name: Stückartikel (enthalten, schreibungsunabhängig)
     description: in Kleinbuchstaben eintragen
 
 # log

@@ -9,3 +9,6 @@ Script name: "Skript"
 number of runs to list: "Anzahl an Ausführungen, die aufgelistet werden sollen"
 last imported run: "Letzte importierte Ausführung"
 manual changes: "{} manuelle Änderungen"
+
+# categories
+incl. subcategories: inkl. Unterkategorien

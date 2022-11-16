@@ -1,11 +1,3 @@
-import importlib
-from geopy import Nominatim
-import folium
-from folium import plugins
-
-import base
-import foodsoft
-
 """
 Reads the suppliers from your Foodsoft instance, puts them onto a map and saves it as an html file.
 In case you want to exclude certain suppliers, you can do that by using supplier categories in Foodsoft.
@@ -15,6 +7,14 @@ Requirements:
 pip install geopy
 pip install folium
 """
+
+import importlib
+from geopy import Nominatim
+import folium
+from folium import plugins
+
+import base
+import foodsoft
 
 # Inputs this script's methods take
 # none

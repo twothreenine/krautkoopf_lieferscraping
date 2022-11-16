@@ -1,0 +1,34 @@
+# variables
+Foodsoft supplier ID:
+    name: "ID von Lieferant*in in Foodsoft"
+message prefix:
+    name: "Text, der der Zusammenfassung vorangestellt wird"
+ignore articles by name (exact, case-sensitive):
+    name: Ignoriere Artikel per Name (exakt, Groß-/Kleinschreibung-unterscheidend)
+ignore articles by name (containing, case-insensitive):
+    name: Ignoriere Artikel per Name (enthalten, schreibungsunabhängig)
+    description: in Kleinbuchstaben eintragen
+strings to replace in article name:
+    name: Zeichenfolgen, die im Artikelnamen ersetzt werden sollen
+piece articles (exact, case-sensitive):
+    name: Stückartikel (exakt, Groß-/Kleinschreibung-unterscheidend)
+piece articles (containing, case-insensitive):
+    name: Stückartikel (enthalten, schreibungsunabhängig)
+    description: in Kleinbuchstaben eintragen
+
+# log
+price list converted: "Preisliste umgewandelt"
+marked as imported: "als hochgeladen markiert"
+
+# methods
+convert_price_list:
+    name: "Preisliste umwandeln"
+    description: "Hiermit wird die Preisliste eingelesen, die Artikeldaten mit denen aus der Foodsoft sowie den zuletzt hochgeladenen verglichen und eine CSV-Datei zum Hochladen in die Foodsoft generiert."
+mark_as_imported:
+    name: "Als hochgeladen markieren"
+    description: "Hiermit wird diese CSV als zuletzt hochgeladene Artikelliste markiert. Dies ist wichtig beim nächsten Auslesen, damit manuelle Änderungen in der Foodsoft beim Import bzw. danach erkannt werden können. Wenn die Datei nicht hochgeladen wird, diesen Schritt also auslassen!"
+
+# inputs
+price_list_input:
+    name: Preisliste
+    description: "hier die .xlsx-Datei hereinziehen oder auswählen"

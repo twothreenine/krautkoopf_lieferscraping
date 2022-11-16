@@ -1,3 +1,7 @@
+"""
+Script for reading out the webshop from Fairfood Freiburg (screenscraping) and creating a CSV file for article upload into Foodsoft.
+"""
+
 from bs4 import BeautifulSoup
 import requests
 from selenium import webdriver
@@ -92,7 +96,7 @@ class ScriptRun(base.Run):
                         if loose_offers_count > 0: # only import smallest loose B2B offer per product
                             break
 
-        self.articles = foodsoft_article_import.rename_duplicates(self.articles)
+        self.articles, self.notifications = foodsoft_article_import.rename_duplicates(locales=session.locales, articles=self.articles, notifications=self.notifications)
 
         self.log.append(base.LogEntry(action="webshop read", done_by=base.full_user_name(session)))
         self.next_possible_methods = [generate_csv]
@@ -102,12 +106,12 @@ class ScriptRun(base.Run):
         # TODO: test changes
         config = base.read_config(self.foodcoop, self.configuration)
         version_delimiter = "_v"
-        articles_from_foodsoft = foodsoft_article_import.get_articles_from_foodsoft(supplier_id=self.supplier_id, foodsoft_connector=session.foodsoft_connector, version_delimiter=version_delimiter)
-        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, version_delimiter=version_delimiter, notifications=self.notifications)
+        articles_from_foodsoft, self.notifications = foodsoft_article_import.get_articles_from_foodsoft(locales=session.locales, supplier_id=self.supplier_id, foodsoft_connector=session.foodsoft_connector, notifications=self.notifications, version_delimiter=version_delimiter)
+        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(locales=session.locales, foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, version_delimiter=version_delimiter, notifications=self.notifications)
         self.articles = foodsoft_article_import.version_articles(articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, version_delimiter=version_delimiter, compare_name=False)
         self.articles = sorted(self.articles, key=lambda x: x.name)
-        self.notifiations = foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
-        message = foodsoft_article_import.compose_articles_csv_message(supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=self.supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_subcategories=self.ignored_products, ignored_articles=self.ignored_articles, notifications=self.notifications, prefix=base.read_in_config(config, "message prefix", ""))
+        self.notifiations = foodsoft_article_import.write_articles_csv(locales=session.locales, file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
+        message = foodsoft_article_import.compose_articles_csv_message(locales=session.locales, supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=self.supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_subcategories=self.ignored_products, ignored_articles=self.ignored_articles, notifications=self.notifications, prefix=base.read_in_config(config, "message prefix", ""))
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Zusammenfassung"), content=message)
 
         self.log.append(base.LogEntry(action="CSV generated", done_by=base.full_user_name(session)))

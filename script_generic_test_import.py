@@ -1,3 +1,7 @@
+"""
+Demo script for creating a CSV which can be uploaded into Foodsoft.
+"""
+
 import importlib
 
 import base
@@ -31,8 +35,8 @@ class ScriptRun(base.Run):
         overlong_note = "This is a very long text. Since Foodsoft only supports up to 255 characters in the articles' data strings (note, manufacturer, origin) and won't validate them by itself, we have to resize it in order to not cause an error. Nobody would read it anyway to the end!"
         test = foodsoft_article.Article(available=False, order_number=1, name="Test article", note=overlong_note, unit="1 kg", price_net=5.40, category="Test")
         articles.append(test)
-        notifications = foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_articles_" + self.name), articles=articles)
-        base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Summary"), content=foodsoft_article_import.compose_articles_csv_message(supplier=self.configuration, notifications=notifications))
+        notifications = foodsoft_article_import.write_articles_csv(locales=session.locales, file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_articles_" + self.name), articles=articles)
+        base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Summary"), content=foodsoft_article_import.compose_articles_csv_message(locales=session.locales, supplier=self.configuration, notifications=notifications))
         base.write_txt(file_path=base.file_path(path=self.path, folder="details", file_name="Log"), content="")
         self.next_possible_methods = [finish]
         self.completion_percentage = 80

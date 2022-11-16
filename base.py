@@ -100,18 +100,18 @@ def prepare_string_for_comparison(string, case_sensitive, strip):
     return string
 
 def equal_strings_check(list1, list2, case_sensitive=False, strip=True):
-    # compares strings of two lists for matches and returns list of matching strings of list1
+    # compares strings of two lists for matches and returns list of matching strings
     matches = []
     compare_list1 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list1]
     compare_list2 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list2]
 
     for string in compare_list1:
         if string in compare_list2:
-            matches.append(string)
+            matches.append(list1[compare_list1.index(string)])
     return matches
 
 def containing_strings_check(list1, list2, case_sensitive=False, strip=True):
-    # checks if strings of list1 appear in any string of list2 and returns list of matching strings of list1
+    # checks if any string of list1 contains any string of list2 and returns list of matching strings of list2
     matches = []
     compare_list1 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list1]
     compare_list2 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list2]
@@ -119,7 +119,7 @@ def containing_strings_check(list1, list2, case_sensitive=False, strip=True):
     for string in compare_list1:
         for query_string in compare_list2:
             if query_string in string:
-                matches.append(string)
+                matches.append(list2[compare_list2.index(query_string)])
     return matches
 
 def replace_in_string(string: str, strings_to_replace: dict) -> str:
@@ -303,7 +303,7 @@ def get_file_path(foodcoop, configuration, run, folder, ending="", notifications
             file_path = files[0]
     return file_path, notifications
 
-def list_categories(categories):
+def list_categories(locales, categories):
     txt = ""
     for category in categories:
         txt += "#"
@@ -313,7 +313,7 @@ def list_categories(categories):
             txt += " " + category.name
         if category.subcategories:
             subcats = category.subcategories.copy()
-            txt += " (inkl. Unterkategorien " + subcats[0].name
+            txt += f' ({locales["base"]["incl. subcategories"]} ' + subcats[0].name
             subcats.pop(0)
             for sc in subcats:
                 txt += ", " + sc.name

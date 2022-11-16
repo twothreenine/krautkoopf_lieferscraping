@@ -1,0 +1,15 @@
+order_number: order number
+name: name
+unit: unit
+price_net: net price
+available: available
+note: note
+manufacturer: manufacturer
+origin: origin
+vat: vat
+deposit: deposit
+unit_quantity: unit quantity
+category: category
+orig_unit: original unit
+by (supplier): by
+from (origin): from

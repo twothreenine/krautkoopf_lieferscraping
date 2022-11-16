@@ -1,3 +1,7 @@
+"""
+Script for converting a XLSX price list from HolperHof, A-8264 Hainersdorf into a CSV file for upload into Foodsoft.
+"""
+
 import importlib
 import openpyxl
 
@@ -37,6 +41,8 @@ class ScriptRun(base.Run):
         price_list = openpyxl.load_workbook(price_list_input).worksheets[0]
         articles_to_ignore_exact = config.get("ignore articles by name (exact, case-sensitive)", [])
         articles_to_ignore_containing = config.get("ignore articles by name (containing, case-insensitive)", [])
+        categories_to_ignore_exact = config.get("ignore categories by name (exact, case-sensitive)", [])
+        categories_to_ignore_containing = config.get("ignore categories by name (containing, case-insensitive)", [])
         strings_to_replace_in_article_name = config.get("strings to replace in article name", {})
         piece_articles_exact = config.get("piece articles (exact, case-sensitive)", {})
         piece_articles_containing = config.get("piece articles (containing, case-insensitive)", {})
@@ -65,7 +71,7 @@ class ScriptRun(base.Run):
                 self.categories.append(category)
             elif not article_row[0]:
                 pass
-            elif "In allen Preisen" in article_row[0]:
+            elif "In allen Preisen" in article_row[0] or "Alle Produkte sind" in article_row[0]:
                 break
             else:
                 original_name = article_row[0]
@@ -92,17 +98,16 @@ class ScriptRun(base.Run):
                         else:
                             article = self.convert_to_500g_article(article=article)
 
-                    article_hash = hash(f"{original_name}{unit}")
-                    article.order_number = f"{str(self.categories.index(category)).zfill(2)}{str(article_hash)}"
+                    article.order_number = f"{str(self.categories.index(category)).zfill(2)}_{name}_{article.unit}"
 
                     self.articles.append(article)
 
-        self.articles = foodsoft_article_import.rename_duplicates(self.articles)
-        articles_from_foodsoft = foodsoft_article_import.get_articles_from_foodsoft(supplier_id=supplier_id, foodsoft_connector=session.foodsoft_connector)
-        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, notifications=self.notifications)
-        self.notifications = foodsoft_article_import.write_articles_csv(file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
+        self.articles, self.notifications = foodsoft_article_import.rename_duplicates(locales=session.locales, articles=self.articles, notifications=self.notifications)
+        articles_from_foodsoft, self.notifications = foodsoft_article_import.get_articles_from_foodsoft(locales=session.locales, supplier_id=supplier_id, foodsoft_connector=session.foodsoft_connector, notifications=self.notifications)
+        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(locales=session.locales, foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, notifications=self.notifications)
+        self.notifications = foodsoft_article_import.write_articles_csv(locales=session.locales, file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
         message_prefix = config.get("message prefix", "")
-        message = foodsoft_article_import.compose_articles_csv_message(supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_articles=self.ignored_articles, notifications=self.notifications, prefix=message_prefix)
+        message = foodsoft_article_import.compose_articles_csv_message(locales=session.locales, supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_articles=self.ignored_articles, notifications=self.notifications, prefix=message_prefix)
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Zusammenfassung"), content=message)
 
         self.next_possible_methods = [mark_as_imported]
@@ -110,6 +115,8 @@ class ScriptRun(base.Run):
         self.log.append(base.LogEntry(action="price list converted", done_by=base.full_user_name(session)))
 
     def mark_as_imported(self, session):
+        base.set_config_detail(foodcoop=self.foodcoop, configuration=self.configuration, detail="last imported run", value=self.name)
+
         self.next_possible_methods = []
         self.completion_percentage = 100
         self.log.append(base.LogEntry(action="marked as imported", done_by=base.full_user_name(session)))
