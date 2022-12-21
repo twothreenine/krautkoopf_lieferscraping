@@ -302,9 +302,9 @@ def recalculate_unit_for_article(article, category_names, recalculate_units):
 
         if units_matching:
             recalculate_for_categories = recalculate_units[subdict].get("categories", [])
+            categories_case_sensitive = recalculate_units[subdict].get("categories case-sensitive", False)
             categories_matching = False
             if recalculate_for_categories:
-                categories_case_sensitive = recalculate_units[subdict].get("categories case-sensitive", False)
                 if recalculate_units[subdict].get("categories exact", False):
                     categories_matching = base.equal_strings_check(list1=category_names, list2=recalculate_for_categories, case_sensitive=categories_case_sensitive)
                 else:
