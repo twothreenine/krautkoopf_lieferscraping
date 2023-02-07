@@ -2,7 +2,7 @@
 <html>
     <head>
         <title>Lieferscraping - Start</title>
-        % include("templates/header.tpl")
+        {% include "header.html" %}
     </head>
 
     <body>
@@ -18,7 +18,7 @@
             <form action="/" method="post">
                 <input name="new instance" value="Neue Instanz anlegen" type="submit" />
             </form>
-            <p>{{!instances_content}}</p>
+            <p>{{ instances_content|safe() }}</p>
         </div>
     </body>
 </html>
