@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup as bs
 import urllib.request
 import copy
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG) # 
 
 class Supplier:
     def __init__(self, name, address, website="", category="", additional_fields=None, latitude=None, longitude=None, icon=None, icon_prefix=None, icon_color=None):

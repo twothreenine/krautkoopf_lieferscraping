@@ -26,7 +26,8 @@ def config_variables(): # List of the special config variables this script uses,
         base.Variable(name="strings to replace in article name", required=False, example={"Zwetschen": "Zwetschken", "250g": "", "*": ""}),
         base.Variable(name="piece articles (exact, case-sensitive)", required=False, example={"Chinakohl": 500, "Brokkoli": 300}),
         base.Variable(name="piece articles (containing, case-insensitive)", required=False, example={"knoblauch": 80}),
-        base.Variable(name="parcels in names", required=False, example=["0,25 l", "0,5 l"])
+        base.Variable(name="parcels in names", required=False, example=["0,25 l", "0,5 l"]),
+        base.Variable(name="recalculate units", required=False, example={"Obst & Gemüse": {"categories": ["Obst & Gemüse"], "original units": ["kg", "1kg", "1 kg"], "replacement units": {"500g": 0.5}}, "Äpfel": {"categories": ["Äpfel"], "original units": ["kg", "1kg", "1 kg"], "replacement units": {"500g": 0.5}}})
         ]
 
 class ScriptRun(base.Run):
@@ -47,6 +48,7 @@ class ScriptRun(base.Run):
         piece_articles_exact = config.get("piece articles (exact, case-sensitive)", {})
         piece_articles_containing = config.get("piece articles (containing, case-insensitive)", {})
         parcels_in_names = config.get("parcels in names", [])
+        recalculate_units = config.get("recalculate units", {})
         self.categories = []
         self.articles = []
         self.ignored_categories = []
@@ -61,7 +63,7 @@ class ScriptRun(base.Run):
                 new_row.append(column.value)
             rows += [new_row]
 
-        recalculate_unit = True # 500g or Stk. instead of kg, but only for vegetables, not for dry goods
+        prefix_delimiter = "_"
 
         category = base.Category(name="Gemüse")
         self.categories.append(category)
@@ -88,23 +90,27 @@ class ScriptRun(base.Run):
                 if base.equal_strings_check(list1=[name, original_name], list2=articles_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[name, original_name], list2=articles_to_ignore_containing, case_sensitive=False, strip=False):
                     self.ignored_articles.append(article)
                 else:
-                    if recalculate_unit and unit in ["1kg", "1 kg", "kg"]:
+                    article_versions = [article]
+                    unit_converted = False
+                    if category.name == "Gemüse" and unit in ["1kg", "1 kg", "kg"]:
                         matching_piece_articles_exact = base.equal_strings_check(list1=[name, original_name], list2=[str(entry) for entry in piece_articles_exact.keys()], case_sensitive=True, strip=False)
                         matching_piece_articles_containing = base.containing_strings_check(list1=[name, original_name], list2=[str(entry) for entry in piece_articles_containing.keys()], case_sensitive=False, strip=False)
                         if matching_piece_articles_exact:
                             article = self.convert_to_piece_article(article=article, conversion=piece_articles_exact[matching_piece_articles_exact[0]])
+                            unit_converted = True
                         elif matching_piece_articles_containing:
                             article = self.convert_to_piece_article(article=article, conversion=piece_articles_containing[matching_piece_articles_containing[0]])
-                        else:
-                            article = self.convert_to_500g_article(article=article)
+                            unit_converted = True
+                    if not unit_converted:
+                        article_versions = foodsoft_article_import.recalculate_unit_for_article(article=article, category_names=[category.name], recalculate_units=recalculate_units) # convert to e.g. 500g unit (multiple units possible)
 
-                    article.order_number = f"{str(self.categories.index(category)).zfill(2)}_{name}_{article.unit}"
+                    for av in article_versions:
+                        av.order_number = f"{str(self.categories.index(category)).zfill(2)}{prefix_delimiter}{name}_{av.unit}"
+                        self.articles.append(av)
 
-                    self.articles.append(article)
-
-        self.articles, self.notifications = foodsoft_article_import.rename_duplicates(locales=session.locales, articles=self.articles, notifications=self.notifications)
-        articles_from_foodsoft, self.notifications = foodsoft_article_import.get_articles_from_foodsoft(locales=session.locales, supplier_id=supplier_id, foodsoft_connector=session.foodsoft_connector, notifications=self.notifications)
-        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(locales=session.locales, foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, notifications=self.notifications)
+        self.articles, self.notifications = foodsoft_article_import.rename_duplicates(locales=session.locales, articles=self.articles, compare_unit=True, notifications=self.notifications)
+        articles_from_foodsoft, self.notifications = foodsoft_article_import.get_articles_from_foodsoft(locales=session.locales, supplier_id=supplier_id, foodsoft_connector=session.foodsoft_connector, prefix_delimiter=prefix_delimiter, notifications=self.notifications)
+        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(locales=session.locales, foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, prefix_delimiter=prefix_delimiter, notifications=self.notifications)
         self.notifications = foodsoft_article_import.write_articles_csv(locales=session.locales, file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
         message_prefix = config.get("message prefix", "")
         message = foodsoft_article_import.compose_articles_csv_message(locales=session.locales, supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_articles=self.ignored_articles, notifications=self.notifications, prefix=message_prefix)

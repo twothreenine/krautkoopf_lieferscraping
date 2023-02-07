@@ -708,7 +708,7 @@ def get_favicon():
 
 if __name__ == "__main__":
     # waitress.serve(app)
-    bottle.run(app, host='0.0.0.0', port=8080, debug=True)
+    bottle.run(app, host='0.0.0.0', port=8080) # , debug=True
     # finally:
     #     print('Stopped')
     # cherrypy.tree.graft(app, "/")
