@@ -15,7 +15,7 @@ import foodsoft_article
 import foodsoft_article_import
 
 # Inputs this script's methods take
-create_orders_till = base.Input(name="create_orders_till", required=True, input_format="date")
+create_orders_till = base.Input(name="create_orders_till", required=False, input_format="date")
 create_orders_from = base.Input(name="create_orders_from", required=False, input_format="date")
 message_subject_suffix = base.Input(name="message_subject_suffix", required=False)
 message_extra_content = base.Input(name="message_extra_content", required=False, input_format="textarea")
@@ -52,11 +52,11 @@ class ScriptRun(base.Run):
         super().__init__(foodcoop=foodcoop, configuration=configuration)
         self.next_possible_methods = [create_orders_directly, prepare_orders]
 
-    def create_orders_directly(self, session, create_orders_till, create_orders_from=None, message_subject_suffix="", message_extra_content=""):
+    def create_orders_directly(self, session, create_orders_till=None, create_orders_from=None, message_subject_suffix="", message_extra_content=""):
         self.prepare_orders(session=session, create_orders_till=create_orders_till, create_orders_from=create_orders_from)
         self.create_prepared_orders(session=session, message_subject_suffix=message_subject_suffix, message_extra_content=message_extra_content)
 
-    def prepare_orders(self, session, create_orders_till, create_orders_from=None):
+    def prepare_orders(self, session, create_orders_till=None, create_orders_from=None):
         config = base.read_config(self.foodcoop, self.configuration)
         self.supplier_id = config.get("Foodsoft supplier ID")
         # allow_simultaneous_orders = config.get("allow simultaneous orders")
@@ -71,10 +71,10 @@ class ScriptRun(base.Run):
         auto_close = config.get("auto close")
         auto_send = config.get("auto send")
         ignore_minimum_quantity = config.get("ignore minimum quantity")
-        note = config.get("note")
+        note = config.get("note", "")
 
-
-        create_orders_till = datetime.datetime.strptime(create_orders_till, '%Y-%m-%d').date()
+        if create_orders_till:
+            create_orders_till = datetime.datetime.strptime(create_orders_till, '%Y-%m-%d').date()
         if create_orders_from:
             create_orders_from = datetime.datetime.strptime(create_orders_from, '%Y-%m-%d').date()
         else:
@@ -96,18 +96,19 @@ class ScriptRun(base.Run):
         driver = open_driver(session)
         driver.get(f"{session.foodsoft_connector._url}suppliers/{str(self.supplier_id)}") # get list of existing orders
         date_time = driver.find_element(By.XPATH, "(//tbody/tr/td)[2]").text
-        print(date_time)
-        last_order_end = datetime.datetime.strptime(date_time, '%d.%m.%Y %H:%M').date()
+        last_order_end = get_date(date_time)
 
         if time_period_mode == "day":
             end_date = last_order_end + datetime.timedelta(days=time_period_factor)
+            if not create_orders_till:
+                create_orders_till = end_date
             while end_date <= create_orders_till:
                 if end_date >= create_orders_from:
                     if order_duration:
                         start_date = end_date - datetime.timedelta(days=order_duration)
                         start_date_str = start_date.strftime('%Y-%m-%d')
                     else: # if order duration is not specified, open order at time of creation
-                        start_date_str = datetime.date.today.strftime('%Y-%m-%d')
+                        start_date_str = datetime.date.today().strftime('%Y-%m-%d')
                         start_time = datetime.datetime.now().strftime('%H:%M')
                     end_date_str = end_date.strftime('%Y-%m-%d')
                     if delivery_duration:
@@ -140,11 +141,20 @@ class ScriptRun(base.Run):
             self.created_orders.append(order)
 
         if config.get("send message"):
-            subject = config.get("message subject") + " " + message_subject_suffix
-            content = config.get("message content top") + "\n\n"
+            subject = config.get("message subject", "")
+            if subject and message_subject_suffix:
+                subject += " "
+            subject += message_subject_suffix
+            content = config.get("message content top", "")
+            if content:
+                content += "\n\n"
             if message_extra_content:
-                content += message_extra_content + "\n\n"
-            content += config.get("message content bottom")
+                content += message_extra_content
+            bottom_content = config.get("message content bottom", "")
+            if bottom_content:
+                if message_extra_content:
+                    content += "\n\n"
+                content += bottom_content
             if subject and content:
                 driver.get(session.foodsoft_connector._url + "messages/new")
                 driver.find_element(By.XPATH, "//input[@id='message_send_method_all']").click()
@@ -203,6 +213,17 @@ def open_driver(session):
             'expiry': cookie.expires,
         })
     return driver
+
+def get_date(s_date):
+    date_patterns = ["%d.%m.%Y %H:%M", "%d-%m-%Y %H:%M", "%d/%m/%Y %H:%M", "%d/%-m/%Y %H:%M", "%Y-%m-%d %H:%M"]
+
+    for pattern in date_patterns:
+        try:
+            return datetime.datetime.strptime(s_date, pattern).date()
+        except:
+            pass
+
+    print(f"Date is not in expected format: {s_date}")
 
 if __name__ == "__main__":
     importlib.invalidate_caches()
