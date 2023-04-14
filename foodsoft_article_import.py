@@ -337,6 +337,61 @@ def recalculate_unit_for_article(article, category_names, recalculate_units):
         articles = [article]
     return articles
 
+def create_loose_offer(article, product, create_loose_offers, category_names=None, amount_mode=False):
+    """
+    Transforms an article with a single unit (unit_quantity = 1) into an article consisting of parcels.
+    E.g. a bag of 5 kg into 10 x 0.5 kg, to allow order groups to order smaller amounts.
+    category_names is expected to be a list (e.g. [original_category, renamed_category]).
+    create_loose_offers is expected to be a dictionary of the following layout ... TODO
+    amount_mode: If True, then article.amount is transformed instead of article.unit. article.amount is expected to be a float in the base unit (e.g. 0.5 for 0.5 kg).
+
+
+    """
+
+    for subdict in create_loose_offers:
+        pass # TODO
+
+def resort_articles_in_categories(article_name, category_name, resort_articles_in_categories, return_original=True):
+    """
+    Delivers an alternative category name based on the config item resort_articles_in_categories.
+    resort_articles_in_categories is expected to be a dictionary of the following layout:
+    {"Kategorie 1": {"exact": False, "case-sensitive": False, "original categories": ["Obst & Gemüse", "Äpfel"], "target categories": {"Fruchtgemüse": ["Zucchini", "tomate"]}, "rest": "Sonstiges"}}
+    Or in yaml style:
+    Kategorie 1:
+        exact: False            # default False
+        case-sensitive: False   # default False
+        original categories:    # category_name is checked for matches in these strings
+        - Obst & Gemüse
+        - Äpfel
+        target categories:
+            Fruchtgemüse:
+            - Zucchini          # if article_name matches this string, "Fruchtgemüse" will be returned as new category name
+            - tomate
+        rest: Sonstiges         # if neither "Zucchini" nor "tomate" is found in article_name, "Sonstiges" will be returned as new category name
+
+    You can choose if you want to use "target categories" and/or "rest", both are optional.
+    If "rest" is not specified and none of the target categories' strings match, the original category_name will be returned, unless return_original is set to False, then None will be returned.
+    """
+    for resort_category in resort_articles_in_categories:
+        exact = resort_articles_in_categories[resort_category].get("exact")
+        case_sensitive = resort_articles_in_categories[resort_category].get("case-sensitive")
+        if exact:
+            if base.equal_strings_check(list1=[category_name], list2=resort_articles_in_categories[resort_category].get("original categories", []), case_sensitive=case_sensitive):
+                for target_category, target_category_products in resort_articles_in_categories[resort_category].get("target categories", {}).items():
+                    if base.equal_strings_check(list1=[article_name], list2=target_category_products, case_sensitive=case_sensitive):
+                        return target_category
+                if rest_category := resort_articles_in_categories[resort_category].get("rest"):
+                    return rest_category
+        else:
+            if base.containing_strings_check(list1=[category_name], list2=resort_articles_in_categories[resort_category].get("original categories", []), case_sensitive=case_sensitive):
+                for target_category, target_category_products in resort_articles_in_categories[resort_category].get("target categories", {}).items():
+                    if base.containing_strings_check(list1=[article_name], list2=target_category_products, case_sensitive=case_sensitive):
+                        return target_category
+                if rest_category := resort_articles_in_categories[resort_category].get("rest"):
+                    return rest_category
+    if return_original:
+        return category_name
+
 def base_price_str(article_price, base_unit):
     # used in combination with recalculate_unit_for_article
     if article_price:

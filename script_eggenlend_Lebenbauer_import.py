@@ -35,8 +35,8 @@ def config_variables(): # List of the special config variables this script uses,
         base.Variable(name="ignore categories by name (containing, case-insensitive)", required=False, example=["dörr", "bäck"]),
         base.Variable(name="ignore articles by name (exact, case-sensitive)", required=False, example=["Birnennektar"]),
         base.Variable(name="ignore articles by name (containing, case-insensitive)", required=False, example=["nektar"]),
-        base.Variable(name="keep articles by name (exact, case-sensitive)", required=False, example=["Birnennektar xy"]),
-        base.Variable(name="keep articles by name (containing, case-insensitive)", required=False, example=["Pfirsichnektar"]),
+        # base.Variable(name="keep articles by name (exact, case-sensitive)", required=False, example=["Birnennektar xy"]),
+        # base.Variable(name="keep articles by name (containing, case-insensitive)", required=False, example=["Pfirsichnektar"]),
         # base.Variable(name="strings to replace in article name", required=False, example={"Zwetschen": "Zwetschken", "250g": "", "*": ""}),
         base.Variable(name="piece articles per category (exact, case-sensitive)", required=False, example={"Obst & Gemüse": {"Chinakohl": 500, "Brokkoli": 300}}),
         base.Variable(name="piece articles per category (containing, case-insensitive)", required=False, example={"Obst & Gemüse": {"knoblauch": 80}}),
@@ -324,33 +324,7 @@ class ScriptRun(base.Run):
                                 name = name.replace("\r", " ")
 
                                 # match categories
-                                # TODO: outsource this into foodsoft_article_import for usage in other scripts
-                                target_category_name = category_name
-                                for resort_category in resort_articles_in_categories:
-                                    exact = resort_articles_in_categories[resort_category].get("exact")
-                                    case_sensitive = resort_articles_in_categories[resort_category].get("case-sensitive")
-                                    if exact:
-                                        if base.equal_strings_check(list1=[category_name], list2=resort_articles_in_categories[resort_category].get("original categories", []), case_sensitive=case_sensitive):
-                                            match_found = False
-                                            for target_category, target_category_products in resort_articles_in_categories[resort_category].get("target categories", {}).items():
-                                                if base.equal_strings_check(list1=[name], list2=target_category_products, case_sensitive=case_sensitive):
-                                                    target_category_name = target_category
-                                                    match_found = True
-                                                    break
-                                            if not match_found:
-                                                if rest_category := resort_articles_in_categories[resort_category].get("rest"):
-                                                    target_category_name = rest_category
-                                    else:
-                                        if base.containing_strings_check(list1=[category_name], list2=resort_articles_in_categories[resort_category].get("original categories", []), case_sensitive=case_sensitive):
-                                            match_found = False
-                                            for target_category, target_category_products in resort_articles_in_categories[resort_category].get("target categories", {}).items():
-                                                if base.containing_strings_check(list1=[name], list2=target_category_products, case_sensitive=case_sensitive):
-                                                    target_category_name = target_category
-                                                    match_found = True
-                                                    break
-                                            if not match_found:
-                                                if rest_category := resort_articles_in_categories[resort_category].get("rest"):
-                                                    target_category_name = rest_category
+                                target_category_name = foodsoft_article_import.resort_articles_in_categories(article_name=name, category_name=category_name, resort_articles_in_categories=resort_articles_in_categories)
 
                                 # add article origin and manufacturer information via config
                                 origin = ""
