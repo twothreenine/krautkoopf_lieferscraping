@@ -1,18 +1,21 @@
 # variables
 Foodsoft supplier ID:
     name: "ID von Lieferant*in in Foodsoft"
-time period mode:
-    name: Zeitperiode Modus
-    description: Intervalle zwischen Bestellungs-Enddaten; bislang nur "day" möglich
-time period factor:
-    name: Faktor für Zeitperiode
-    description: Bestellungen für jeden ... Tag eröffnen (7 für wöchentliche Bestellungen)
+min interval:
+    name: Min. Intervall
+    description: zwischen Bestellungs-Enden, in Tagen
 order start time:
     name: Uhrzeit für Bestellungsstart
+order end weekdays:
+    name: Wochentage für Bestellungs-Ende
+    description: Ein oder mehrere Wochentage, an denen die Bestellung enden kann
 order end time:
     name: Uhrzeit für Bestellungsende
-order duration:
-    name: Dauer der Bestellung
+min order duration:
+    name: Mindestdauer der Bestellung
+    description: Bestellungs-Enddatum wird so ausgewählt, dass Bestellung mindestens x Tage offen ist
+max order duration:
+    name: Maximaldauer der Bestellung
     description: Bestellungs-Startdatum wird x Tage vor Enddatum gesetzt
 delivery duration:
     name: Dauer der Lieferung
@@ -58,11 +61,15 @@ create_prepared_orders:
 # inputs
 create_orders_till:
     name: "Bestellungen bis"
-    description: "Bestellungen mit Enddatum bis zu diesem Datum werden erstellt. Falls leer, wird genau eine Bestellung erstellt."
+    description: "Bestellungen mit Enddatum bis zu diesem Datum werden erstellt (ggf. mehr als bei Anzahl Bestellungen angegeben)."
 
 create_orders_from:
     name: "Bestellungen ab"
     description: "Bestellungen mit Enddatum ab diesem Datum werden erstellt. Falls leer, ab heute."
+
+number_of_orders_to_create:
+    name: "Anzahl Bestellungen"
+    description: Wie viele Bestellungen angelegt werden sollen (ggf. mehr als durch "Bestellungen bis" festgelegt). Falls leer, wird genau eine Bestellung erstellt.
 
 message_subject_suffix:
     name: "Nachrichtenbetreff-Zusatz"
