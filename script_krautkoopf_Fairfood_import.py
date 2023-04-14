@@ -11,6 +11,8 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.common.exceptions import ElementClickInterceptedException
+# from webdriver_manager.firefox import GeckoDriverManager
+from selenium.webdriver.firefox.service import Service as FirefoxService
 from webdriver_manager.firefox import GeckoDriverManager
 import xml.etree.ElementTree as ET
 import re
@@ -68,7 +70,8 @@ class ScriptRun(base.Run):
         self.recipient_vat = vat.reduced(base.read_in_config(config, "country of destination"))
         self.original_vat = vat.reduced("de")
 
-        driver = webdriver.Firefox(executable_path=GeckoDriverManager().install()) # Change here if you want use Chromium
+        # driver = webdriver.Firefox(executable_path=GeckoDriverManager().install())
+        driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()))
 
         self.read_b2c_feed(driver=driver, config=config)
 
