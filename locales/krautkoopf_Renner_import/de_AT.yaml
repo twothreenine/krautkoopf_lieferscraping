@@ -1,18 +1,18 @@
 # variables
 
 # log
-executed: "ausgeführt"
-finished: "abgeschlossen"
+price list converted: "Preisliste umgewandelt"
+marked as imported: "als hochgeladen markiert"
 
 # methods
-run_script:
-    name: "Skript durchlaufen"
-    description: "Hiermit wird der Hauptteil des Skriptes ausgeführt, welcher eine Test-CSV generiert."
-finish:
-    name: "Ausführung abschließen"
-    description: "Hiermit der Fortschrittsbalken dieser Ausführung auf 100% gesetzt und keine weiteren Optionen angeboten. Dies ist nur zur Veranschaulichung, dass Skripte aus mehreren Methoden bestehen können, die einzeln aufgerufen werden können."
+convert_price_list:
+    name: "Preisliste umwandeln"
+    description: "Hiermit wird die Preisliste eingelesen, die Artikeldaten mit denen aus der Foodsoft sowie den zuletzt hochgeladenen verglichen und eine CSV-Datei zum Hochladen in die Foodsoft generiert. Die .pdf-Daten müssen zunächst manuell (öffnen und Strg+A) in eine .xslx (LibreOffice Calc und einfügen) kopiert werden."
+mark_as_imported:
+    name: "Als hochgeladen markieren"
+    description: "Hiermit wird diese CSV als zuletzt hochgeladene Artikelliste markiert. Dies ist wichtig beim nächsten Auslesen, damit manuelle Änderungen in der Foodsoft beim Import bzw. danach erkannt werden können. Wenn die Datei nicht hochgeladen wird, diesen Schritt also auslassen!"
 
 # inputs
 price_list:
     name: Preisliste
-    description: PDF
+    description: XSLX
