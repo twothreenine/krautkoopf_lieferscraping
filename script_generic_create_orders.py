@@ -100,7 +100,7 @@ class ScriptRun(base.Run):
 
         driver = open_driver(session)
         driver.get(f"{session.foodsoft_connector._url}suppliers/{str(self.supplier_id)}") # get list of existing orders
-        date_time = driver.find_element(By.XPATH, "(//tbody/tr/td)[2]").text
+        date_time = driver.find_element(By.XPATH, "//div[@class='span6'][last()]//tbody/tr/td[2]").text
         last_order_end = get_datetime(date_time)
 
         end, last_weekday_index = get_next_end(last_end=last_order_end, min_interval=min_interval, end_weekday_numbers=end_weekday_numbers)
