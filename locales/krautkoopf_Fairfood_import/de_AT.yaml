@@ -21,7 +21,7 @@ marked as imported: "als hochgeladen markiert"
 # methods
 read_webshop:
     name: "Webshop auslesen"
-    description: "Hiermit wird der Webshop ausgelesen und die ausgelesenen Daten zur weiteren Verarbeitung in dieser Ausführung zwischengespeichert. Gib die Zugangsdaten deiner Foodcoop zum Webshop ein, um ggf. auch die B2B-Angebote auszulesen."
+    description: "Hiermit wird der Webshop ausgelesen und die ausgelesenen Daten zur weiteren Verarbeitung in dieser Ausführung zwischengespeichert. Gib die Zugangsdaten deiner FoodCoop zum Webshop ein, um ggf. auch die B2B-Angebote auszulesen."
 generate_csv:
     name: "CSV generieren"
     description: "Hiermit werden die ausgelesenen Artikeldaten mit denen aus der Foodsoft sowie den zuletzt hochgeladenen verglichen und eine CSV-Datei zum Hochladen in die Foodsoft generiert."
