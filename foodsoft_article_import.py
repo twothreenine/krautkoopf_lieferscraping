@@ -395,7 +395,7 @@ def resort_articles_in_categories(article_name, category_name, resort_articles_i
 def base_price_str(article_price, base_unit):
     # used in combination with recalculate_unit_for_article
     if article_price:
-        return f"{'{:.2f}'.format(article_price)} €/{base_unit}".replace(".", ",")
+        return f"{'{:.2f}'.format(round(article_price, 2))} €/{base_unit}".replace(".", ",")
     else:
         return f"? €/{base_unit}"
 
@@ -452,8 +452,6 @@ def get_data_from_articles(locales, articles, notifications, version_delimiter=N
     return rows, notifications
 
 def compose_articles_csv_message(locales, supplier, foodsoft_url=None, supplier_id=None, categories=None, ignored_categories=None, ignored_subcategories=None, ignored_articles=None, notifications=None, prefix=""):
-    # TODO: use locales
-
     text = ""
     if prefix:
         text += prefix + "\n\n"

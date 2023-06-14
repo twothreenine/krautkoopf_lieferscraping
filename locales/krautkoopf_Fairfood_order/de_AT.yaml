@@ -1,0 +1,20 @@
+# variables
+Foodsoft supplier ID:
+    name: "ID von Lieferant*in in Foodsoft"
+message prefix:
+    name: "Text, der der Zusammenfassung vorangestellt wird"
+
+# log
+order processed: "Bestellung verarbeitet"
+
+# methods
+order:
+    name: "Bestellung verarbeiten"
+    description: "Hiermit werden von der letzten geschlossenen Fairfood-Bestellung alle bestellten B2B-Artikel in den Warenkorb gelegt und eine Liste mit manuell zu bestellenden B2C-Artikeln generiert."
+
+# inputs
+email:
+    name: "E-Mail-Adresse"
+password:
+    name: "Passwort"
+

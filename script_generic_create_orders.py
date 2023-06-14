@@ -98,7 +98,7 @@ class ScriptRun(base.Run):
         else:
             end_action = "no_end_action"
 
-        driver = open_driver(session)
+        driver = session.foodsoft_connector.open_driver()
         driver.get(f"{session.foodsoft_connector._url}suppliers/{str(self.supplier_id)}") # get list of existing orders
         date_time = driver.find_element(By.XPATH, "//div[@class='span6'][last()]//tbody/tr/td[2]").text
         last_order_end = get_datetime(date_time)
@@ -133,7 +133,7 @@ class ScriptRun(base.Run):
 
     def create_prepared_orders(self, session, message_subject_suffix="", message_extra_content=""):
         config = base.read_config(self.foodcoop, self.configuration)
-        driver = open_driver(session)
+        driver = session.foodsoft_connector.open_driver()
         self.created_orders = []
 
         for order in self.orders_to_create:
@@ -228,19 +228,6 @@ class Order:
             return f'{babel.dates.format_skeleton(skeleton="EEEEddMMyy", datetime=self.pickup, locale=locale)}'
         else:
             return "(ohne Abholdatum)"
-
-def open_driver(session):
-    # driver = webdriver.Firefox(executable_path=GeckoDriverManager().install())
-    driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()))
-    driver.get(session.foodsoft_connector._url)
-    for cookie in session.foodsoft_connector._session.cookies:
-        driver.add_cookie({
-            'name': cookie.name,
-            'value': cookie.value,
-            'path': cookie.path,
-            'expiry': cookie.expires,
-        })
-    return driver
 
 def get_datetime(s_datetime):
     datetime_patterns = ["%d.%m.%Y %H:%M", "%d-%m-%Y %H:%M", "%d/%m/%Y %H:%M", "%d/%-m/%Y %H:%M", "%Y-%m-%d %H:%M"]
