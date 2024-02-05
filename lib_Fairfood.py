@@ -5,14 +5,18 @@ Script for reading out the webshop from Fairfood Freiburg (screen-scraping) and 
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, ElementNotInteractableException
 from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.firefox import GeckoDriverManager
 import re
-# import math
 import time
 from decimal import *
-# from difflib import SequenceMatcher
+import requests
+import tabula
+from subprocess import CalledProcessError
 
 import base
 import foodsoft_article
@@ -44,11 +48,14 @@ class ScriptRun(base.Run):
         self.products_to_ignore_containing = config.get("ignore products by name (containing, case-insensitive)", [])
         self.resort_articles_in_categories = config.get("resort articles in categories", {})
         self.exclude_categories_from_loose_orders = config.get("exclude categories from loose orders", [])
+        self.minimum_parcel_grm = config.get("minimum parcel grm", 100)
 
         self.categories = [] # like "Nüsse", "Nussmus" etc. with Products as subcategories // previously "product types" like "Cashewkerne", which have Products as subcategories (= "item groups" like "Cashewkerne Chili & Paprika")
         self.articles = [] # the selection of offers loaded into foodsoft
         self.ignored_categories = []
         self.ignored_products = []
+        self.offers_out_of_stock = []
+        self.offers_below_minimum_parcel_grm = []
         self.notifications = [] # notes for the run's info message
         self.recipient_vat_reduced = vat.reduced(config.get("country of destination"))
         self.recipient_vat_standard = vat.standard(config.get("country of destination"))
@@ -68,8 +75,15 @@ class ScriptRun(base.Run):
             for product in category.subcategories:
                 category_name = foodsoft_article_import.resort_articles_in_categories(article_name=product.name, category_name=category.name, resort_articles_in_categories=self.resort_articles_in_categories)
                 offers = sorted(product.offers, key=lambda x: x.content_grm)
+                missing_offers = [offer for offer in product.offers_not_readable if offer not in [of.orig_unit for of in product.offers]]
+                if missing_offers:
+                    self.notifications.append(f"Could not open options for B2C article '{product.name}' - {self.get_article_link(number=product.number, shop='b2c', parentID=True)}: {', '.join(missing_offers)}")
                 loose_offers_count = 0
                 for offer in offers:
+                    if offer.smallest_parcel_grm:
+                        if offer.smallest_parcel_grm < self.minimum_parcel_grm:
+                            self.offers_below_minimum_parcel_grm.append(f"{offer.name} {offer.orig_unit}")
+                            continue
                     content_grm = offer.content_grm
                     offers_of_same_amount = sorted([o for o in offers if o.content_grm == content_grm], key=lambda x: x.gross_price)
                     if offer == offers_of_same_amount[0]:
@@ -77,8 +91,8 @@ class ScriptRun(base.Run):
                         base_price = offer.gross_kgm_price
                         offer_name = offer.name
                         if base_price:
-                            offer_name += f' ({price_str(base_price)}€/kg)'
-                        if unit == "100g lose": # offer.shop == "b2b" and 
+                            offer_name += f' ({price_str(base_price)} € / kg)'
+                        if unit == "100 g lose": # offer.shop == "b2b" and 
                             loose_offers_count += 1
                         article = foodsoft_article.Article(order_number=f"{offer.shop}_{offer.number}", name=offer_name, note=product.compose_note(), unit=unit, price_net=price_net, available=offer.available, vat=offer.vat, deposit=offer.deposit, unit_quantity=unit_quantity, category=category_name, manufacturer=product.manufacturer, origin=product.origin, ignore=False, orig_unit=offer.orig_unit) # note=offer.description
 
@@ -104,6 +118,14 @@ class ScriptRun(base.Run):
         self.articles = sorted(self.articles, key=lambda x: x.name)
         self.notifiations = foodsoft_article_import.write_articles_csv(locales=session.locales, file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
         message = foodsoft_article_import.compose_articles_csv_message(locales=session.locales, supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=self.supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_subcategories=self.ignored_products, notifications=self.notifications, prefix=config.get("message prefix", ""))
+        if self.offers_out_of_stock:
+            message += "\n\nOut of stock:"
+        for ooos in self.offers_out_of_stock:
+            message += f"\n- {ooos}"
+        if self.offers_below_minimum_parcel_grm:
+            message += "\n\nBelow minimum parcel size:"
+        for obmpg in self.offers_below_minimum_parcel_grm:
+            message += f"\n- {obmpg}"
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Zusammenfassung"), content=message)
 
         self.log.append(base.LogEntry(action="CSV generated", done_by=base.full_user_name(session)))
@@ -127,37 +149,47 @@ class ScriptRun(base.Run):
 
         self.driver = session.foodsoft_connector.open_driver()
         order_id, orders_from_csv = foodsoft_article_order.get_orders_from_csv(session=session, driver=self.driver, supplier_id=self.supplier_id)
-        print(orders_from_csv)
+
         if len(orders_from_csv) > 1:
             if email and password:
                 self.login(email=email, password=password)
+                time.sleep(1)
+                self.accept_cookies()
+                time.sleep(1)
+            actions = ActionChains(self.driver)
             for row in orders_from_csv[1:]:
-                print(row)
                 amount = row[0]
                 order_number = row[1].split("_")
                 shop = order_number[0]
                 number = order_number[1].split("_v")[0] # cut off at version delimiter
+                article_link = self.get_article_link(number, shop)
                 oa_name = row[2]
                 oa_unit = row[3]
                 oa_uq = row[4]
                 if not oa_uq:
                     oa_uq = 1
-                self.driver.get(f"https://b2b.fairfood.bio/detail/{number}")
+                if shop == "b2b":
+                    self.notifications.append(f"Bestelle {str(amount)}x {article_link}")
+                    self.driver.get({article_link})
                 time.sleep(1)
                 if self.get_offer_number() == number:
                     if shop == "b2c":
-                        self.notifications.append(f"B2B offer found for B2C order article {self.oa_str(number, oa_name, oa_uq, oa_unit)}")
-                    if amount != '1':
-                        amount_input = self.driver.find_element(By.XPATH, "//input[@class='form-control js-quantity-selector quantity-selector-group-input']")
-                        amount_input.clear()
-                        amount_input.send_keys(str(amount))
-                        time.sleep(1)
-                    self.driver.find_element(By.XPATH, "//button[@class='btn btn-primary btn-buy']").click()
-                    time.sleep(1)
-                    name, orig_name, orig_unit = self.parse_product_name()
-                    self.articles_put_in_cart.append(self.ordered_article_str(amount, orig_name))
+                        self.notifications.append(f"B2B offer found for B2C order article {self.oa_str(number, oa_name, oa_uq, oa_unit)}: {str(amount)}x {article_link}")
+                    # if amount != '1':
+                    #     amount_input = self.driver.find_element(By.XPATH, "//input[@class='form-control js-quantity-selector quantity-selector-group-input']")
+                    #     amount_input.clear()
+                    #     amount_input.send_keys(str(amount))
+                    #     time.sleep(1)
+                    # buy_button = self.driver.find_element(By.XPATH, "//button[@class='btn btn-primary btn-buy']")
+                    # self.driver.execute_script("arguments[0].scrollIntoView();", buy_button)
+                    # # actions.move_to_element(buy_button).perform()
+                    # buy_button.click()
+                    # # WebDriverWait(self.driver, 30).until(EC.element_to_be_clickable((By.XPATH, "//button[@class='btn btn-primary btn-buy']"))).click()
+                    # time.sleep(1)
+                    # name, orig_name, orig_unit = self.parse_product_name()
+                    # self.articles_put_in_cart.append(self.ordered_article_str(amount, orig_name))
                 elif shop == "b2c":
-                    self.driver.get(f"https://fairfood.bio/detail/{number}")
+                    self.driver.get(article_link)
                     time.sleep(1)
                     if self.get_offer_number() == number:
                         name, orig_name, orig_unit = self.parse_product_name()
@@ -189,6 +221,14 @@ class ScriptRun(base.Run):
     def failed_oa_str(self, amount, number, oa_name, oa_uq, oa_unit):
         return f"{str(amount)}x {self.oa_str(number, oa_name, oa_uq, oa_unit)}"
 
+    def get_article_link(self, number, shop, parentID=False):
+        if shop == "b2c":
+            shop == "www"
+        detail = ""
+        if parentID:
+            detail = "detail/"
+        return f"https://{shop}.fairfood.bio/{detail}{number}"
+
     def start_driver(self):
         self.driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()))
 
@@ -201,6 +241,14 @@ class ScriptRun(base.Run):
         login_button.click()
         time.sleep(1)
 
+    def accept_cookies(self):
+        try:
+            accept_cookies = self.driver.find_element(By.XPATH, "//span[@class='js-cookie-accept-all-button']/button")
+        except NoSuchElementException:
+            accept_cookies = None
+        if accept_cookies:
+            accept_cookies.click()
+
     def read_shop(self, b2b=False):
         ignored_exceptions = (NoSuchElementException,)
         if b2b:
@@ -209,8 +257,8 @@ class ScriptRun(base.Run):
             shop = "b2c"
             self.driver.get(f"https://fairfood.bio")
             time.sleep(1)
+        self.accept_cookies()
         category_links = BeautifulSoup(self.driver.page_source, features="html.parser").body.find(class_="nav main-navigation-menu").find_all("a")
-        category_links = [cl for cl in category_links if cl.get("title") not in ["Aktion", "Aktionen", "Alle Produkte", "Rezepte", "Unsere Mission"]]
         for cl in category_links:
             current_category = None
             category_name = cl.get("title")
@@ -255,25 +303,32 @@ class ScriptRun(base.Run):
                     name, orig_name, orig_unit = self.parse_product_name()
                     if not current_product:
                         origin = ""
-                        origin_div = self.driver.find_element(By.XPATH, "//div[@class='col-md-6']/div")
-                        if origin_div.get_attribute("textContent"):
-                            origin_h = None
+                        abort_ps = False
+                        try:
+                            product_specification_link = self.driver.find_element(By.XPATH, "//div[@data-cms-element-id='11323f6417f64d03adf8c9b837127c81']/div/a").get_attribute('href')
+                        except NoSuchElementException:
                             try:
-                                origin_h = origin_div.find_element(By.CSS_SELECTOR, "h3")
+                                product_specification_link = self.driver.find_element(By.XPATH, "//div[@data-cms-element-id='11323f6417f64d03adf8c9b837127c81']/div/p/a").get_attribute('href')
                             except NoSuchElementException:
+                                abort_ps = True
+                                self.notifications.append(f"No product specification div for {orig_name}")
+                        if not abort_ps:
+                            try:
+                                product_specification = requests.get(product_specification_link)
+                            except requests.exceptions.MissingSchema:
+                                abort_ps = True
+                                self.notifications.append(f"No product specification link for {orig_name}")
+                            if not abort_ps:
+                                file_name = 'product_specification.pdf'
+                                with open(file_name, 'wb') as f:
+                                   f.write(product_specification.content)
                                 try:
-                                    origin_h = origin_div.find_element(By.CSS_SELECTOR, "h2")
-                                except NoSuchElementException:
-                                    pass
-                            if origin_h:
-                                origin = origin_h.get_attribute("textContent")
-                                if "aus " in origin:
-                                    origin = origin.split("aus ")[1]
-                                elif "aus " in origin:
-                                    origin = origin.split("aus ")[1]
-                                elif "in " in origin:
-                                    origin = origin.split("in ")[1]
-                                origin = origin.split("\n")[0].strip()
+                                    df = tabula.read_pdf(file_name, lattice=True, pages=1, encoding='utf-8', pandas_options={'header': None})[0]
+                                except CalledProcessError:
+                                    abort_ps = True
+                                    self.notifications.append(f"No product specification file for {orig_name}")
+                                if not abort_ps:
+                                    origin = df[df[0].str.contains('Herkunft', na=False)].reset_index(drop=True).iloc[0,1].split("\r")[0]
                         ingredients = self.driver.find_element(By.XPATH, "//div[@class='product-detail-description-text']").text.split("Zutaten:")[-1].split("\n")[0].replace("&nbsp", "").strip()
                         if ingredients == name:
                             ingredients = ""
@@ -286,20 +341,30 @@ class ScriptRun(base.Run):
                             current_category.subcategories.append(current_product)
                     number = product_link.split("/")[-1]
                     if number not in [o.number for o in current_product.offers]:
-                        self.parse_offer(current_product=current_product, current_category=current_category, orig_name=orig_name, orig_unit=orig_unit, shop=shop, number=number, b2b=b2b)
+                        if self.check_availability():
+                            self.parse_offer(current_product=current_product, current_category=current_category, orig_name=orig_name, orig_unit=orig_unit, shop=shop, number=number, b2b=b2b)
+                        else:
+                            self.offers_out_of_stock.append(f"{orig_name} ({shop})")
                     if not b2b: # in the B2C shop, there are some products with "hidden" options, so have to check if there any offers we haven't got yet
                         try:
                             options = self.driver.find_elements(By.XPATH, "//div[@class='product-detail-configurator-options']/div/label")
                         except NoSuchElementException:
                             continue
                         hidden_options = [opt for opt in [o.get_attribute("title") for o in options] if opt not in [of.orig_unit for of in current_product.offers]]
-                        print(hidden_options)
                         for ho in hidden_options:
-                            self.driver.find_element(By.XPATH, f"//div[@class='product-detail-configurator-options']/div/label[@title='{ho}']").click()
+                            try:
+                                self.driver.find_element(By.XPATH, f"//div[@class='product-detail-configurator-options']/div/label[@title='{ho}']").click()
+                            except ElementNotInteractableException:
+                                if ho not in current_product.offers_not_readable:
+                                    current_product.offers_not_readable.append(ho)
+                                continue
                             time.sleep(1)
                             number = self.driver.find_element(By.XPATH, "//meta[@property='og:url']").get_attribute('content').split("/")[-1]
                             name, orig_name, orig_unit = self.parse_product_name()
-                            self.parse_offer(current_product=current_product, current_category=current_category, orig_name=orig_name, orig_unit=orig_unit, shop=shop, number=number, b2b=b2b)
+                            if self.check_availability():
+                                self.parse_offer(current_product=current_product, current_category=current_category, orig_name=orig_name, orig_unit=orig_unit, shop=shop, number=number, b2b=b2b)
+                            else:
+                                self.offers_out_of_stock.append(f"{orig_name} ({shop})")
 
     def parse_product_name(self):
         orig_name = self.driver.find_element(By.XPATH, "//h1[@class='product-detail-name']").text
@@ -310,6 +375,17 @@ class ScriptRun(base.Run):
         else:
             orig_unit = "Stück"
         return name, orig_name, orig_unit
+
+    def check_availability(self):
+        available = True
+        try:
+            self.driver.find_element(By.XPATH, "//button[@class='btn btn-primary btn-buy']")
+        except NoSuchElementException:
+            available = False
+        if available:
+            return True
+        else:
+            return False
 
     def parse_offer(self, current_product, current_category, orig_name, orig_unit, shop, number, b2b):
         net_price = float(self.driver.find_element(By.XPATH, "//meta[@itemprop='price']").get_attribute('content'))
@@ -361,6 +437,7 @@ class Product(base.Category):
             self.offers = offers
         else:
             self.offers = []
+        self.offers_not_readable = []
 
     def compose_note(self):
         return ". ".join([string for string in [self.note, self.ingredients, self.details] if string != ""])
@@ -387,6 +464,15 @@ class Offer:
             return 0
 
     @property
+    def smallest_parcel_grm(self):
+        if self.content:
+            if self.content == "grm":
+                return self.amount
+            elif self.content.content == "grm":
+                return self.content.amount
+        return None
+
+    @property
     def gross_price(self):
         return self.price + self.price * self.vat / 100
 
@@ -403,12 +489,12 @@ class Offer:
         if self.content:
             if self.content.content == "grm":
                 if self.content.amount > 1000 and self.category_name not in exclude_categories_from_loose_orders:
-                    unit = "100g lose"
+                    unit = "100 g lose"
                     unit_quantity = int(self.content.amount / 100)
                     price = self.price / unit_quantity
                     self.name = self.name.split("(")[0] + " - lose"
                 else:
-                    unit = f"{self.content.amount}g"
+                    unit = f"{self.content.amount} g"
                     price = self.price
                     if self.content.amount < 400:
                         # unit += " MW-Glas"
@@ -416,13 +502,13 @@ class Offer:
                     else:
                         if self.content.amount >= 2000:
                             self.name = self.name.split("(")[0] + " - Eimer"
-                            unit = self.orig_unit
+                            unit = f"{str(self.content.amount / 1000).replace('.', ',')} kg"
                             self.deposit = 3
                         else:
                             self.name = self.name.split("(")[0] + " - Beutel"
                             # unit += " Beutel"
             elif self.content.content:
-                unit = f"{self.content.content.amount}g"
+                unit = f"{self.content.content.amount} g"
                 unit_quantity = self.content.amount
                 price = self.price / unit_quantity
                 if self.content.content.amount < 400:
