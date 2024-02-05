@@ -8,6 +8,7 @@ import re
 from bs4 import BeautifulSoup as bs
 import urllib.request
 import copy
+import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.service import Service as FirefoxService
@@ -68,9 +69,13 @@ class FSConnector:
 
         self.login(user, password)
 
-    def _get(self, url, header, data=None):
-        if data is None:
-            response = self._session.get(url, headers=header)
+    def _get(self, url, header, response=None):
+        while response is None: # TODO: max retries instead of endless loop?
+            try:
+                response = self._session.get(url, headers=header)
+            except requests.exceptions.ConnectionError:
+                print("requests.exceptions.ConnectionError, waiting 3 seconds and trying again ...")
+                time.sleep(3)
         if response.status_code != 200: # TODO: I think we should handle errors instead of automatically closing the session & raising an error (also applies to _post function)
             self._session.close()
             logging.error('ERROR ' + str(response.status_code) + ' during GET ' + url)
