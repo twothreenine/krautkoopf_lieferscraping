@@ -8,6 +8,7 @@ Hanföl kaltgepresst: gleiches Produkt 2x eingetragen
 import importlib
 from bs4 import BeautifulSoup
 import requests
+import undetected_chromedriver as uc
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
@@ -16,8 +17,8 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.firefox.service import Service as FirefoxService
-from webdriver_manager.firefox import GeckoDriverManager
+# from selenium.webdriver.chrome.service import Service as ChromeService
+# from webdriver_manager.chrome import ChromeDriverManager
 import re
 import time
 
@@ -67,20 +68,21 @@ class ScriptRun(base.Run):
         self.notifications = []
         base_url = "https://www.biohofmuellner.at"
 
-        driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()))
+        driver = uc.Chrome()
         driver.get(base_url + "/shop")
         ignored_exceptions = (NoSuchElementException,StaleElementReferenceException,)
-        accept_cookies = WebDriverWait(driver, 20, ignored_exceptions=ignored_exceptions).until(EC.element_to_be_clickable((By.XPATH, "//div[@class='_27MYo']/a")))
+        accept_cookies = WebDriverWait(driver, 20, ignored_exceptions=ignored_exceptions).until(EC.element_to_be_clickable((By.XPATH, "//div[@data-gi-selector='accept-all-cookies']/a")))
         accept_cookies.click()
-        product_links = BeautifulSoup(driver.page_source, features="html.parser").body.find(class_="_1l7uY").find_all("a")
+        product_links = BeautifulSoup(driver.page_source, features="html.parser").body.find(id="8f0075a4-a2ad-4ab3-8acc-3918472d6d04").find_all("a")
         for product_link in product_links:
             driver.get(base_url + product_link.get("href"))
             time.sleep(1)
             product_page = BeautifulSoup(driver.page_source, features="html.parser").body
-            info = product_page.find(class_="_39RBN")
-            orig_name = info.find("h1").text.replace("bio ", "").replace("Bio ", "")
+            product_data = product_page.find("div", {"data-gi-selector": "product-page"})
+            info = product_data.find("div")
+            orig_name = info.find("h1").text.replace("bio ", "").replace("Bio ", "").replace(" 100% 🇦🇹", "")
             description = info.find("p").get_text()
-            category_name = driver.find_element(By.XPATH, "//ul[@class='YSWQ4 _2ePf1']/li[2]/p/a/span").text
+            category_name = product_page.find("section").find("ul").find_all("li")[1].get_text() # driver.find_element(By.XPATH, "//section/ul/li[2]/p/a/span").text
             category_name = foodsoft_article_import.resort_articles_in_categories(article_name=orig_name, category_name=category_name, resort_articles_in_categories=resort_articles_in_categories)
             category_found = False
             for c in self.categories + self.ignored_categories:
@@ -102,7 +104,8 @@ class ScriptRun(base.Run):
             product.open = True
             cat.subcategories.append(product)
 
-            select_box_bs = product_page.find(class_="_1Qhy3")
+            price_data = product_data.find_all("div", recursive=False)[-1]
+            select_box_bs = price_data.find("select")
             if select_box_bs:
                 options = select_box_bs.find_all("option")
                 for option in options:
@@ -140,7 +143,7 @@ class ScriptRun(base.Run):
                     article = foodsoft_article.Article(order_number=order_number, name=name, unit=unit, unit_quantity=unit_quantity, price_net=price, category=category_name, origin="eigen", note=description, amount=amount, base_unit=base_unit, orig_name=orig_name)
                     product.articles.append(article)
             else:
-                price = float(product_page.find(class_="P9xMj").get_text().replace("\xa0", " ").split(" ")[0].replace(",", "."))
+                price = float(price_data.find("span").get_text().replace("\xa0", " ").split(" ")[0].replace(",", "."))
                 article = foodsoft_article.Article(order_number=orig_name, name=orig_name, unit="Stk", price_net=price, category=category_name, origin="eigen", note=description, amount=None, base_unit=None, orig_name=orig_name)
                 product.articles.append(article)
 
