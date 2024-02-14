@@ -1,4 +1,5 @@
 import flask
+import flask_login
 import re
 import os
 import numbers
@@ -13,7 +14,7 @@ import foodsoft
 HTTP_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'CONNECT', 'OPTIONS', 'TRACE', 'PATCH']
 
 class App(flask.Flask):
-    def __init__(self, import_name):
+    def __init__(self, import_name=__name__):
         super().__init__(import_name)
         self.instance = None
         self.foodsoft_connector = None
@@ -29,7 +30,17 @@ class App(flask.Flask):
         self.locales = base.read_locales(instance)
         self.locale = self.settings["default_locale"]
 
-app = App(__name__)
+app = App()
+app.secret_key = b'_5#y2L"F4Q8z\n\xec]/' # TODO: generate random key
+login_manager = flask_login.LoginManager()
+login_manager.init_app(app)
+
+class User(flask_login.UserMixin):
+    pass
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.get(user_id)
 
 def get_locale_string(term, script_name, substring="", enforce_return=False):
     if term in app.locales[script_name] and substring in app.locales[script_name][term]:
@@ -58,20 +69,23 @@ def read_messages():
     app.messages = []
     return content
 
-def check_login(submitted_form, instance):
-    global app
+def check_login(submitted_form, cookies, instance):
 
-    if app.foodsoft_connector:
-        if app.instance == instance:
-            return True
-        else:
-            return False
-    elif 'password' in submitted_form:
+
+    user_data = cookies.get("user")
+    if user_data:
+        user_data = user_data.split("/")
+        cookie_instance = user_data[0]
+        cookie_email = user_data[1]
+        if app.foodsoft_connector:
+            if app.instance == instance and instance == cookie_instance:
+                return True
+    if 'password' in submitted_form:
         app.switch_to_instance(instance)
         success = None
         feedback = ""
-        email = submitted_form.getunicode('email')
-        password = submitted_form.getunicode('password')
+        email = submitted_form.get('email')
+        password = submitted_form.get('password')
         foodsoft_address = app.settings.get('foodsoft_url')
         app.foodsoft_connector = foodsoft.FSConnector(url=foodsoft_address, user=email, password=password)
         app.foodsoft_connector.add_user_data(workgroups=True)
@@ -115,17 +129,17 @@ def submitted_form_content(submitted_form, request_path=None):
         submitted_form_content += f'<input name="request_path" value="{request_path}" hidden />'
     if submitted_form:
         for field in submitted_form:
-            submitted_form_content += f'<input name="{field}" value="{submitted_form.getunicode(field)}" hidden />'
+            submitted_form_content += f'<input name="{field}" value="{submitted_form.get(field)}" hidden />'
     return submitted_form_content
 
 def login_link(instance):
     return flask.render_template("login_link.html", instance=instance)
 
 def configuration_link(configuration):
-    return bottle.template("<a href='/{{foodcoop}}/{{configuration}}'>{{configuration}}</a>", foodcoop=app.instance, configuration=configuration)
+    return flask.render_template("login_link.html", foodcoop=app.instance, configuration=configuration)
 
 def display_output_link(configuration, run_name):
-    return bottle.template("<a href='/{{foodcoop}}/{{configuration}}/display/{{run_name}}'>{{run_name}}</a>", foodcoop=app.instance, configuration=configuration, run_name=run_name)
+    return bottle.template("", foodcoop=app.instance, configuration=configuration, run_name=run_name)
 
 def available_scripts():
     script_files = [f for f in os.listdir() if f.startswith("script_") and f.endswith(".py")]
@@ -440,7 +454,7 @@ def main_page():
             content += "<br/>"
         content += configuration_link(configuration)
 
-    return bottle.template('templates/main.tpl', messages=read_messages(), base_locales=app.locales["base"], fc=app.instance, foodcoop=app.instance.capitalize(), configurations=content)
+    return flask.render_template('main.html', messages=read_messages(), base_locales=app.locales["base"], fc=app.instance, foodcoop=app.instance.capitalize(), configurations=content)
 
 def login_page(fc, request_path=None, submitted_form=None):
     if not request_path:
@@ -450,13 +464,13 @@ def login_page(fc, request_path=None, submitted_form=None):
         return switch_instance_page(fc, request_path, submitted_form)
     else:
         app.switch_to_instance(fc)
-        foodsoft_address = app.settings["foodsoft_url"]
+        foodsoft_address = app.settings.get("foodsoft_url")
         foodsoft_login_address = foodsoft_address
         if not foodsoft_login_address.endswith("/"):
             foodsoft_login_address += "/"
         foodsoft_login_address += "login"
         description = app.settings.get("description", "")
-        return bottle.template('templates/login.tpl', messages=read_messages(), request_path=request_path, submitted_form_content=submitted_form_content(submitted_form), foodcoop=app.instance.capitalize(), foodsoft_address=foodsoft_address, foodsoft_login_address=foodsoft_login_address, description=description)
+        return flask.render_template('login.html', messages=read_messages(), request_path=request_path, submitted_form_content=submitted_form_content(submitted_form), foodcoop=app.instance.capitalize(), foodsoft_address=foodsoft_address, foodsoft_login_address=foodsoft_login_address, description=description)
 
 def switch_instance_page(requested_instance, request_path=None, submitted_form=None):
     return bottle.template('templates/switch_instance.tpl', requested_instance=requested_instance, current_instance=app.instance, submitted_form_content=submitted_form_content(submitted_form, request_path))
@@ -573,33 +587,35 @@ def root():
 
 @app.get('/<fc>')
 def login(fc):
-    if check_login(bottle.request.forms, fc):
+    if check_login(flask.request.form, flask.request.cookies, fc):
         return main_page()
     else:
         return login_page(fc)
 
 @app.post('/<fc>')
 def do_main(fc):
-    submitted_form = bottle.request.forms
+    submitted_form = flask.request.form
     if 'logout' in submitted_form:
         global app
         app = App()
         app.instance = None
         app.messages.append("Logout erfolgreich.")
-        request_path = submitted_form.getunicode("request_path")
+        request_path = submitted_form.get("request_path")
         if request_path:
             return login_page(fc, request_path)
         else:
             return root_page()
-    elif check_login(submitted_form, fc):
+    elif check_login(submitted_form, flask.request.cookies, fc):
         if 'new configuration' in submitted_form:
-            return new_configuration_page()
+            resp = flask.make_response(new_configuration_page())
         elif 'new configuration name' in submitted_form:
-            return add_configuration(submitted_form)
+            resp = flask.make_response(add_configuration(submitted_form))
         elif 'delete configuration' in submitted_form:
-            return del_configuration(submitted_form)
+            resp = flask.make_response(del_configuration(submitted_form))
         else:
-            return main_page()
+            resp = flask.make_response(main_page())
+        resp.set_cookie("user", f"{fc}/{app.foodsoft_connector.user}")
+        return resp
     else:
         return login_page(fc)
 

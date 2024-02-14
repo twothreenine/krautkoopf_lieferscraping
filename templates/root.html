@@ -7,7 +7,7 @@
 
     <body>
         <div>
-            <p>{{messages}}</p>
+            <p>{{ messages|safe() }}</p>
             <h1>Lieferscraping</h1>
             <p>Mit diesem Tool können Python-Skripte ausgeführt werden, die z.B. den Webshop einer bestimmten Lieferant*in auslesen und daraus die Artikelliste als CSV für den Import in die Foodsoft generieren.</p>
             <p>Jede Foodcoop kann ihre eigenen Skript-Konfigurationen anlegen. Darin werden Variablen festgelegt, wie z.B. welche Artikel nicht eingelesen werden sollen.</p>
