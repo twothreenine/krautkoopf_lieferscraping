@@ -32,6 +32,12 @@ class Article:
         for kwarg in kwargs: # additional variables
             setattr(self, kwarg, kwargs[kwarg])
 
+class OrderArticle(Article):
+    def __init__(self, amount, order_number, name, unit, price_net, total_price, unit_quantity=1):
+        super().__init__(order_number=order_number, name=name, unit=unit, price_net=price_net, unit_quantity=unit_quantity)
+        self.amount = amount
+        self.total_price = total_price
+
 def suffix(suffix, suffix_type=""):
     word = ""
     if suffix_type: # is this used anywhere?

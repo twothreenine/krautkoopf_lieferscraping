@@ -9,7 +9,6 @@ from selenium.common.exceptions import NoSuchElementException, ElementNotInterac
 from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.firefox import GeckoDriverManager
 import re
 import time
@@ -149,55 +148,46 @@ class ScriptRun(base.Run):
         self.notifications = [] # notes for the run's info message
 
         self.driver = session.foodsoft_connector.open_driver()
-        order_id, orders_from_csv = foodsoft_article_order.get_orders_from_csv(session=session, driver=self.driver, supplier_id=self.supplier_id)
+        order_id, order_articles = foodsoft_article_order.get_order_id_and_articles(session=session, driver=self.driver, supplier_id=self.supplier_id)
 
-        if len(orders_from_csv) > 1:
+        if order_articles:
             if email and password:
                 self.login(email=email, password=password)
                 time.sleep(1)
                 self.accept_cookies()
                 time.sleep(1)
-            actions = ActionChains(self.driver)
-            for row in orders_from_csv[1:]:
-                amount = row[0]
-                order_number = row[1].split("_")
-                shop = order_number[0]
-                number = order_number[1].split("_v")[0] # cut off at version delimiter
+            for oa in order_articles:
+                order_number_strings = oa.order_number.split("_")
+                shop = order_number_strings[0]
+                number = order_number_strings[1].split("_v")[0] # cut off at version delimiter
                 article_link = self.get_article_link(number, shop)
-                oa_name = row[2]
-                oa_unit = row[3]
-                oa_uq = row[4]
-                if not oa_uq:
-                    oa_uq = 1
                 if shop == "b2b":
-                    self.notifications.append(f"Bestelle {str(amount)}x {article_link}")
+                    # self.notifications.append(f"Ordering {str(oa.amount)}x {article_link}")
                     self.driver.get(article_link)
                 time.sleep(1)
                 if self.get_offer_number() == number:
                     if shop == "b2c":
-                        self.notifications.append(f"B2B offer found for B2C order article {self.oa_str(number, oa_name, oa_uq, oa_unit)}: {str(amount)}x {article_link}")
+                        self.notifications.append(f"B2B offer found for B2C order article {self.oa_str(number, oa.name, oa.unit_quantity, oa.unit)}: {str(oa.amount)}x {article_link}")
                     try:
                         amount_input = self.get_amount_input_field()
                     except NoSuchElementException:
-                        self.articles_not_available.append(self.failed_oa_str(amount, number, oa_name, oa_uq, oa_unit))
+                        self.articles_not_available.append(self.failed_oa_str(oa.amount, number, oa.name, oa.unit_quantity, oa.unit))
                         continue
-                    if amount != '1':
+                    if oa.amount != '1':
                         amount_input.clear()
-                        amount_input.send_keys(str(amount))
+                        amount_input.send_keys(str(oa.amount))
                     time.sleep(1)
                     buy_button = self.driver.find_element(By.XPATH, "//button[@class='btn btn-primary btn-buy']")
                     self.driver.execute_script("arguments[0].scrollIntoView();", buy_button)
                     time.sleep(1)
-                    # actions.move_to_element(buy_button).perform()
                     try:
                         buy_button.click()
                     except ElementNotInteractableException:
-                        self.failed_articles.append(self.failed_oa_str(amount, number, oa_name, oa_uq, oa_unit))
+                        self.failed_articles.append(self.failed_oa_str(oa.amount, number, oa.name, oa.unit_quantity, oa.unit))
                         continue
-                    # WebDriverWait(self.driver, 30).until(EC.element_to_be_clickable((By.XPATH, "//button[@class='btn btn-primary btn-buy']"))).click()
                     time.sleep(1)
                     name, orig_name, orig_unit = self.parse_product_name()
-                    self.articles_put_in_cart.append(self.ordered_article_str(amount, orig_name))
+                    self.articles_put_in_cart.append(self.ordered_article_str(oa.amount, orig_name))
                 elif shop == "b2c":
                     self.driver.get(article_link)
                     time.sleep(1)
@@ -206,13 +196,13 @@ class ScriptRun(base.Run):
                         try:
                             amount_input = self.get_amount_input_field()
                         except NoSuchElementException:
-                            self.articles_not_available.append(self.failed_oa_str(amount, number, oa_name, oa_uq, oa_unit))
+                            self.articles_not_available.append(self.failed_oa_str(oa.amount, number, oa.name, oa.unit_quantity, oa.unit))
                             continue
-                        self.articles_to_order_manually.append(self.ordered_article_str(amount, orig_name))
+                        self.articles_to_order_manually.append(self.ordered_article_str(oa.amount, orig_name))
                     else:
-                        self.failed_articles.append(self.failed_oa_str(amount, number, oa_name, oa_uq, oa_unit))
+                        self.failed_articles.append(self.failed_oa_str(oa.amount, number, oa.name, oa.unit_quantity, oa.unit))
                 else:
-                    self.failed_articles.append(self.failed_oa_str(amount, number, oa_name, oa_uq, oa_unit))
+                    self.failed_articles.append(self.failed_oa_str(oa.amount, number, oa.name, oa.unit_quantity, oa.unit))
 
         order_manually_prefix = "Hallo,\n\nzu unserer ebenso abgesendeten B2B-Bestellung bitte folgende Artikel zu B2C-Konditionen anfügen:"
         message = foodsoft_article_order.compose_order_message(session=session, order_id=order_id, articles_put_in_cart=self.articles_put_in_cart, articles_to_order_manually=self.articles_to_order_manually, order_manually_prefix=order_manually_prefix, articles_not_available=self.articles_not_available, failed_articles=self.failed_articles, notifications=self.notifications, prefix=config.get("message prefix", ""))
