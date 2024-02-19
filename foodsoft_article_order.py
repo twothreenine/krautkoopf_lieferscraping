@@ -15,7 +15,7 @@ def get_orders_from_csv(session, driver, supplier_id):
 def get_order_url(session, order_id):
     return f"{session.foodsoft_connector._url}orders/{order_id}"
 
-def compose_order_message(session, order_id, articles_put_in_cart=None, articles_to_order_manually="", order_manually_prefix="", failed_articles=None, notifications=None, prefix=""):
+def compose_order_message(session, order_id, articles_put_in_cart=None, articles_to_order_manually="", order_manually_prefix="", articles_not_available=None, failed_articles=None, notifications=None, prefix=""):
     locales = session.locales
     text = ""
     if prefix:
@@ -32,6 +32,11 @@ def compose_order_message(session, order_id, articles_put_in_cart=None, articles
             text += f'\n{order_manually_prefix}'
         for am in articles_to_order_manually:
             text += f"\n- {am}"
+        text += "\n"
+    if articles_not_available:
+        text += f'\n{locales["foodsoft_article_order"]["articles not available"]}:'
+        for ana in articles_not_available:
+            text += f"\n- {ana}"
         text += "\n"
     if failed_articles:
         text += f'\n{locales["foodsoft_article_order"]["failed articles"]}:'
