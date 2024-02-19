@@ -144,6 +144,7 @@ class ScriptRun(base.Run):
         self.supplier_id = config.get("Foodsoft supplier ID")
         self.articles_to_order_manually = []
         self.articles_put_in_cart = []
+        self.articles_not_available = []
         self.failed_articles = []
         self.notifications = [] # notes for the run's info message
 
@@ -170,29 +171,43 @@ class ScriptRun(base.Run):
                     oa_uq = 1
                 if shop == "b2b":
                     self.notifications.append(f"Bestelle {str(amount)}x {article_link}")
-                    self.driver.get({article_link})
+                    self.driver.get(article_link)
                 time.sleep(1)
                 if self.get_offer_number() == number:
                     if shop == "b2c":
                         self.notifications.append(f"B2B offer found for B2C order article {self.oa_str(number, oa_name, oa_uq, oa_unit)}: {str(amount)}x {article_link}")
-                    # if amount != '1':
-                    #     amount_input = self.driver.find_element(By.XPATH, "//input[@class='form-control js-quantity-selector quantity-selector-group-input']")
-                    #     amount_input.clear()
-                    #     amount_input.send_keys(str(amount))
-                    #     time.sleep(1)
-                    # buy_button = self.driver.find_element(By.XPATH, "//button[@class='btn btn-primary btn-buy']")
-                    # self.driver.execute_script("arguments[0].scrollIntoView();", buy_button)
-                    # # actions.move_to_element(buy_button).perform()
-                    # buy_button.click()
-                    # # WebDriverWait(self.driver, 30).until(EC.element_to_be_clickable((By.XPATH, "//button[@class='btn btn-primary btn-buy']"))).click()
-                    # time.sleep(1)
-                    # name, orig_name, orig_unit = self.parse_product_name()
-                    # self.articles_put_in_cart.append(self.ordered_article_str(amount, orig_name))
+                    try:
+                        amount_input = self.get_amount_input_field()
+                    except NoSuchElementException:
+                        self.articles_not_available.append(self.failed_oa_str(amount, number, oa_name, oa_uq, oa_unit))
+                        continue
+                    if amount != '1':
+                        amount_input.clear()
+                        amount_input.send_keys(str(amount))
+                    time.sleep(1)
+                    buy_button = self.driver.find_element(By.XPATH, "//button[@class='btn btn-primary btn-buy']")
+                    self.driver.execute_script("arguments[0].scrollIntoView();", buy_button)
+                    time.sleep(1)
+                    # actions.move_to_element(buy_button).perform()
+                    try:
+                        buy_button.click()
+                    except ElementNotInteractableException:
+                        self.failed_articles.append(self.failed_oa_str(amount, number, oa_name, oa_uq, oa_unit))
+                        continue
+                    # WebDriverWait(self.driver, 30).until(EC.element_to_be_clickable((By.XPATH, "//button[@class='btn btn-primary btn-buy']"))).click()
+                    time.sleep(1)
+                    name, orig_name, orig_unit = self.parse_product_name()
+                    self.articles_put_in_cart.append(self.ordered_article_str(amount, orig_name))
                 elif shop == "b2c":
                     self.driver.get(article_link)
                     time.sleep(1)
                     if self.get_offer_number() == number:
                         name, orig_name, orig_unit = self.parse_product_name()
+                        try:
+                            amount_input = self.get_amount_input_field()
+                        except NoSuchElementException:
+                            self.articles_not_available.append(self.failed_oa_str(amount, number, oa_name, oa_uq, oa_unit))
+                            continue
                         self.articles_to_order_manually.append(self.ordered_article_str(amount, orig_name))
                     else:
                         self.failed_articles.append(self.failed_oa_str(amount, number, oa_name, oa_uq, oa_unit))
@@ -200,7 +215,7 @@ class ScriptRun(base.Run):
                     self.failed_articles.append(self.failed_oa_str(amount, number, oa_name, oa_uq, oa_unit))
 
         order_manually_prefix = "Hallo,\n\nzu unserer ebenso abgesendeten B2B-Bestellung bitte folgende Artikel zu B2C-Konditionen anfügen:"
-        message = foodsoft_article_order.compose_order_message(session=session, order_id=order_id, articles_put_in_cart=self.articles_put_in_cart, articles_to_order_manually=self.articles_to_order_manually, order_manually_prefix=order_manually_prefix, notifications=self.notifications, prefix=config.get("message prefix", ""))
+        message = foodsoft_article_order.compose_order_message(session=session, order_id=order_id, articles_put_in_cart=self.articles_put_in_cart, articles_to_order_manually=self.articles_to_order_manually, order_manually_prefix=order_manually_prefix, articles_not_available=self.articles_not_available, failed_articles=self.failed_articles, notifications=self.notifications, prefix=config.get("message prefix", ""))
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Zusammenfassung"), content=message)
         self.driver.quit()
         self.driver = None
@@ -208,6 +223,9 @@ class ScriptRun(base.Run):
         self.log.append(base.LogEntry(action="order processed", done_by=base.full_user_name(session)))
         self.next_possible_methods = []
         self.completion_percentage = 50
+
+    def get_amount_input_field(self):
+        return self.driver.find_element(By.XPATH, "//input[@class='form-control js-quantity-selector quantity-selector-group-input']")
 
     def get_offer_number(self):
         return self.driver.find_element(By.XPATH, "//meta[@property='og:url']").get_attribute("content").split("/")[-1]
@@ -218,12 +236,15 @@ class ScriptRun(base.Run):
     def oa_str(self, number, oa_name, oa_uq, oa_unit):
         return f"#{number}: {oa_name} - {str(oa_uq)} x {str(oa_unit)}"
 
-    def failed_oa_str(self, amount, number, oa_name, oa_uq, oa_unit):
-        return f"{str(amount)}x {self.oa_str(number, oa_name, oa_uq, oa_unit)}"
+    def failed_oa_str(self, amount, number, oa_name, oa_uq, oa_unit, reason=""):
+        notification = f"{str(amount)}x {self.oa_str(number, oa_name, oa_uq, oa_unit)}"
+        if reason:
+            notification += f": {reason}"
+        return notification
 
     def get_article_link(self, number, shop, parentID=False):
         if shop == "b2c":
-            shop == "www"
+            shop = "www"
         detail = ""
         if parentID:
             detail = "detail/"
