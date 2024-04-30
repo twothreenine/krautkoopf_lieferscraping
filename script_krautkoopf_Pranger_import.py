@@ -198,7 +198,7 @@ def match_categories(name, note, category_number, cat_name):
         return cat_name
 
 def baseprice_suffix(base_price, base_unit):
-    return " ({}€/{})".format("{:.2f}".format(base_price).replace(".", ","), base_unit)
+    return " ({} € / {})".format("{:.2f}".format(base_price).replace(".", ","), base_unit)
 
 def get_articles(category, articles, ignored_articles, articles_to_ignore):
     for subcat in category:
@@ -233,6 +233,10 @@ def get_articles(category, articles, ignored_articles, articles_to_ignore):
                     origin = address.replace("Österreich", "").replace("AT-", "").replace("A-", "").strip()
                 else:
                     origin = get_if_found(item, "herkunft")
+            if not origin:
+                origin = "unbekannt"
+            if producer == "Von unserem Biohof":
+                producer = "Biohof Pranger"
 
             base_raw = item.find(class_="price ic2")
             base_price, base_unit = ''.join(base_raw.find_all(text=True, recursive=False)).strip().split("€/")

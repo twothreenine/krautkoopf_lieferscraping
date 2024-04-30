@@ -122,6 +122,30 @@ def containing_strings_check(list1, list2, case_sensitive=False, strip=True):
                 matches.append(list2[compare_list2.index(query_string)])
     return matches
 
+def startswith_strings_check(list1, list2, case_sensitive=False, strip=True):
+    # checks if any string of list1 starts with any string of list2 and returns list of matching strings of list2
+    matches = []
+    compare_list1 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list1]
+    compare_list2 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list2]
+
+    for string in compare_list1:
+        for query_string in compare_list2:
+            if string.startswith(query_string):
+                matches.append(list2[compare_list2.index(query_string)])
+    return matches
+
+def endswith_strings_check(list1, list2, case_sensitive=False, strip=True):
+    # checks if any string of list1 ends with any string of list2 and returns list of matching strings of list2
+    matches = []
+    compare_list1 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list1]
+    compare_list2 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list2]
+
+    for string in compare_list1:
+        for query_string in compare_list2:
+            if string.endswith(query_string):
+                matches.append(list2[compare_list2.index(query_string)])
+    return matches
+
 def replace_in_string(string: str, strings_to_replace: dict) -> str:
     # strings_to_replace must be a dictionary of {"string to replace": "by another string"}
     for string_tuple in strings_to_replace.items():
@@ -175,6 +199,7 @@ def read_config(foodcoop, configuration):
     return configuration
 
 def read_in_config(config, detail, alternative=None):
+    # legacy code, use config.get(detail, alternative) instead
     if detail in config:
         return config[detail]
     else:
@@ -291,17 +316,16 @@ def get_outputs(foodcoop, configuration):
         return []
 
 def get_file_path(foodcoop, configuration, run, folder, ending="", notifications=None):
-    file_path = None
     if not notifications:
         notifications = []
     path = os.path.join(output_path(foodcoop, configuration), run, folder)
-    if os.path.isdir(path):
+    if os.path.isdir(path) and ending:
         files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith(ending)]
         if len(files) > 1:
             notifications.append("Warning: Multiple files found for " + run)
         if files:
-            file_path = files[0]
-    return file_path, notifications
+            path = files[0]
+    return path, notifications
 
 def list_categories(locales, categories):
     txt = ""

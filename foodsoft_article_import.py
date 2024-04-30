@@ -127,7 +127,7 @@ def compare_string(locales, article, article_from_last_run, article_from_foodsof
             setattr(article, string_type, manual_string)
     return article, configuration_config
 
-def get_articles_from_foodsoft(locales, supplier_id, foodsoft_connector=None, version_delimiter=None, prefix_delimiter=None, notifications=None):
+def get_articles_from_foodsoft(locales, supplier_id, foodsoft_connector=None, version_delimiter=None, prefix_delimiter=None, skip_unavailable_articles=False, notifications=None):
     # Connect to your Foodsoft instance and download the articles CSV of the supplier
 
     if not notifications:
@@ -137,7 +137,7 @@ def get_articles_from_foodsoft(locales, supplier_id, foodsoft_connector=None, ve
         # fsc = foodsoft.FSConnector(url=foodsoft_url, user=foodsoft_user, password=foodsoft_password)
         csv_from_foodsoft = csv.reader(foodsoft_connector.get_articles_CSV(supplier_id=supplier_id).splitlines(), delimiter=';')
         # fsc.logout()
-        articles_from_foodsoft = foodsoft_article.read_articles_from_csv(csv=csv_from_foodsoft, version_delimiter=version_delimiter, prefix_delimiter=prefix_delimiter)
+        articles_from_foodsoft = foodsoft_article.read_articles_from_csv(csv=csv_from_foodsoft, version_delimiter=version_delimiter, prefix_delimiter=prefix_delimiter, skip_unavailable_articles=skip_unavailable_articles)
     else:
         articles_from_foodsoft = []
         warning = locales["foodsoft_article_import"].get("comparing manual changes failed due to missing foodsoft connector")
@@ -396,9 +396,9 @@ def base_price_str(article_price, base_unit, vat=0):
     # used in combination with recalculate_unit_for_article
     if article_price:
         gross_price = article_price + article_price * vat / 100
-        return f"{'{:.2f}'.format(round(gross_price, 2))} €/{base_unit}".replace(".", ",")
+        return f"{'{:.2f}'.format(round(gross_price, 2)).replace('.', ',')} € / {base_unit}"
     else:
-        return f"? €/{base_unit}"
+        return f"? € / {base_unit}"
 
 def replace_unit(article, replacement_unit_str, replacement_unit_factor):
     # used in combination with recalculate_unit_for_article

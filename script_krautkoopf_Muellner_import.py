@@ -73,6 +73,7 @@ class ScriptRun(base.Run):
         ignored_exceptions = (NoSuchElementException,StaleElementReferenceException,)
         accept_cookies = WebDriverWait(driver, 20, ignored_exceptions=ignored_exceptions).until(EC.element_to_be_clickable((By.XPATH, "//div[@data-gi-selector='accept-all-cookies']/a")))
         accept_cookies.click()
+        time.sleep(2)
         product_links = BeautifulSoup(driver.page_source, features="html.parser").body.find(id="8f0075a4-a2ad-4ab3-8acc-3918472d6d04").find_all("a")
         for product_link in product_links:
             driver.get(base_url + product_link.get("href"))

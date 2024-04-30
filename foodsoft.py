@@ -14,20 +14,36 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.service import Service as FirefoxService
 from webdriver_manager.firefox import GeckoDriverManager
 
+import base
+import foodsoft_article
+
 logging.basicConfig() # level=logging.DEBUG
 
 class Supplier:
-    def __init__(self, name, address, website="", category="", additional_fields=None, latitude=None, longitude=None, icon=None, icon_prefix=None, icon_color=None):
+    def __init__(self, no, name, address="", website="", origin="", category="", additional_fields=None, deleted=False, latitude=None, longitude=None, icon=None, icon_prefix=None, icon_color=None):
+        self.no = no # ID from Foodsoft
         self.name = name
         self.address = address
         self.website = website
+        self.origin = origin
         self.category = category
         self.additional_fields = additional_fields
+        self.deleted = deleted
         self.latitude = latitude
         self.longitude = longitude
         self.icon = icon
         self.icon_prefix = icon_prefix
         self.icon_color = icon_color
+
+    def apply_supplier_delimiters(self, supplier_name_prefix_delimiters, supplier_name_suffix_delimiters, category_name_prefix_delimiters, category_name_suffix_delimiters):
+        for d in supplier_name_prefix_delimiters:
+            self.name = self.name.split(d)[-1]
+        for d in supplier_name_suffix_delimiters:
+            self.name = self.name.split(d)[0]
+        for d in category_name_prefix_delimiters:
+            self.category = self.category.split(d)[-1]
+        for d in category_name_suffix_delimiters:
+            self.category = self.category.split(d)[0]
 
 def read_foodsoft_config():
     foodcoop = "unnamed foodcoop"
@@ -181,7 +197,7 @@ class FSConnector:
         decoded_content = request.content.decode('utf-8')
         return decoded_content
 
-    def get_supplier_data(self, name_fields=None, address_fields=None, website_fields=None, category_fields=None, additional_fields=None, exclude_categories=None):
+    def get_supplier_data(self, name_fields=None, origin_fields=None, address_fields=None, website_fields=None, category_fields=None, additional_fields=None, exclude_categories=None):
         suppliers = []
         supplier_ids = []
         supplier_list_url = f"{self._url}suppliers"
@@ -189,13 +205,13 @@ class FSConnector:
         for row in parsed_html.body.find("tbody").find_all("tr"):
             supplier_ids.append(row.find_all("td")[0].find("a").get("href").split("suppliers/")[-1])
         for supplier_id in supplier_ids:
-            supplier = self.get_data_of_supplier(supplier_id=supplier_id, name_fields=name_fields, address_fields=address_fields, website_fields=website_fields, category_fields=category_fields, additional_fields=copy.deepcopy(additional_fields), exclude_categories=exclude_categories)
+            supplier = self.get_data_of_supplier(supplier_id=supplier_id, name_fields=name_fields, origin_fields=origin_fields, address_fields=address_fields, website_fields=website_fields, category_fields=category_fields, additional_fields=copy.deepcopy(additional_fields), exclude_categories=exclude_categories)
             if supplier:
                 suppliers.append(supplier)
 
         return suppliers
 
-    def get_data_of_supplier(self, supplier_id, name_fields=None, address_fields=None, website_fields=None, category_fields=None, additional_fields=None, exclude_categories=None):
+    def get_data_of_supplier(self, supplier_id, name_fields=None, origin_fields=None, address_fields=None, website_fields=None, category_fields=None, additional_fields=None, exclude_categories=None):
         supplier_url = f"{self._url}suppliers/{str(supplier_id)}/edit"
         parsed_html_body = bs(self._get(supplier_url, self._default_header).content, 'html.parser').body
         category = None
@@ -207,8 +223,14 @@ class FSConnector:
                         if category in exclude_categories:
                             return None
                     break
-        name = self.get_supplier_field_data(parsed_html_body=parsed_html_body, fields=name_fields)
+        fs_name = self.get_supplier_field_data(parsed_html_body=parsed_html_body, fields=["name"])
+        if " †" in fs_name:
+            deleted = True
+        else:
+            deleted = False
+        name = self.get_supplier_field_data(parsed_html_body=parsed_html_body, fields=name_fields).replace(" †", "")
         address = self.get_supplier_field_data(parsed_html_body=parsed_html_body, fields=address_fields)
+        origin = self.get_supplier_field_data(parsed_html_body=parsed_html_body, fields=origin_fields)
         website = self.get_supplier_field_data(parsed_html_body=parsed_html_body, fields=website_fields)
         if additional_fields:
             for af in additional_fields:
@@ -217,7 +239,7 @@ class FSConnector:
                     af["value"] = value
 
         print(f"{name}: {additional_fields}")
-        return Supplier(name=name, address=address, website=website, category=category, additional_fields=additional_fields)
+        return Supplier(no=supplier_id, name=name, address=address, origin=origin, website=website, category=category, additional_fields=additional_fields, deleted=deleted)
 
     def get_supplier_field_data(self, parsed_html_body, fields):
         # checks each field in a list of fields for data and returns the first non-null value
@@ -230,3 +252,70 @@ class FSConnector:
                     field_value = field.get("value")
                 if field_value:
                     return field_value
+
+    def get_stock_articles_and_suppliers(self, skip_unavailable_articles=False, suppliers=None, name_fields=None, origin_fields=None, address_fields=None, website_fields=None, category_fields=None, additional_fields=None, exclude_categories=None):
+        """
+        Returns a list of foodsoft_article.StockArticle objects.
+        Stock quantity changes not included yet.
+        """
+        if not suppliers:
+            suppliers = []
+        parsed_html_body = bs(self._get(f"{self._url}stock_articles", self._default_header).content, 'html.parser').body
+        rows = parsed_html_body.find(id="articles-tbody").find_all("tr")
+        stock_articles = []
+        for row in rows:
+            classes = row.get("class")
+            if classes and classes[-1] == "unavailable":
+                if skip_unavailable_articles:
+                    continue
+                else:
+                    available = False
+            else:
+                available = True
+            no = row.get("id").split("-")[-1]
+            columns = row.find_all("td")
+            category = columns[8].text
+            if category in exclude_categories:
+                continue
+            name = columns[0].find("a").text
+            in_stock = float(columns[1].text.replace(",", "."))
+            ordered = float(columns[2].text.replace(",", "."))
+            available = float(columns[3].text.replace(",", "."))
+            unit = columns[4].text
+            price_net = float(columns[5].text.replace(",", ".").replace("€", "").strip())
+            vat = float(columns[6].text.replace(",", ".").replace("%", "").strip())
+            supplier_id = columns[7].find("a").get("href").split("/")[-1]
+            matching_suppliers = [s for s in suppliers if s.no == supplier_id]
+            if matching_suppliers:
+                supplier = matching_suppliers[0]
+            else:
+                supplier = self.get_data_of_supplier(supplier_id=supplier_id, name_fields=name_fields, origin_fields=origin_fields, address_fields=address_fields, website_fields=website_fields, category_fields=category_fields, additional_fields=additional_fields)
+                if supplier:
+                    suppliers.append(supplier)
+            article_details_page = bs(self._get(f"{self._url}stock_articles/{no}", self._default_header).content, 'html.parser').body
+            details_dl = article_details_page.find(id="stockArticleDetails").find("dl")
+            deposit = float(details_dl.find_all("dd")[5].text.replace(",", ".").replace("€", "").strip())
+            note = details_dl.find_all("dd")[8].text
+            stock_articles.append(foodsoft_article.StockArticle(no=no, in_stock=in_stock, ordered=ordered, supplier=supplier, name=name, unit=unit, price_net=price_net, available=available, order_number=f"00_{str(no)}", note=note, vat=vat, deposit=deposit))
+        return stock_articles, suppliers
+
+    def get_article_categories(self):
+        """
+        Returns a list of base.Category objects.
+        """
+        parsed_html_body = bs(self._get(f"{self._url}article_categories", self._default_header).content, 'html.parser').body
+        rows = parsed_html_body.find("tbody").find_all("tr")
+        article_categories = []
+        for row in rows:
+            name = row.find("td").text
+            number = row.find_all("td")[2].find("a").get("href").split("/")[-2]
+            category = base.Category(name=name, number=number)
+            category.keywords = []
+            description = row.find_all("td")[1].text
+            if description:
+                if description.endswith("..."):
+                    edit_body = bs(self._get(f"{self._url}article_categories/{number}/edit", self._default_header).content, 'html.parser').body
+                    description = edit_body.find(id="article_category_description").text
+                category.keywords = [kw.strip() for kw in description.split(",")]
+            article_categories.append(category)
+        return article_categories

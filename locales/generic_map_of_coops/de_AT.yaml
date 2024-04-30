@@ -1,0 +1,19 @@
+# variables
+# test variable:
+#     name: Test-Variable
+# test variable 2:
+#     name: Test-Variable 2
+#     description: nicht wirklich verwendet, nur zur Demonstration
+
+# log
+executed: "ausgeführt"
+
+# methods
+run_script:
+    name: "Skript ausführen"
+    description: "Hiermit wird das Skript ausgeführt."
+
+# inputs
+coops_csv:
+    name: "CSV"
+    description: "Bestellgruppen-CSV aus IG-Foodsoft"

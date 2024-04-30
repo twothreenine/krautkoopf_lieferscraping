@@ -66,7 +66,7 @@ class ScriptRun(base.Run):
             location = locator.geocode(address)
             if location:
                 # reusing the Supplier class here, although these are not actually suppliers
-                supplier = foodsoft.Supplier(name=fc_address, address=address, additional_fields=[{"value": fc_addresses_dict[fc_address].get("description")}], latitude=location.latitude, longitude=location.longitude, \
+                supplier = foodsoft.Supplier(no=0, name=fc_address, address=address, additional_fields=[{"value": fc_addresses_dict[fc_address].get("description")}], latitude=location.latitude, longitude=location.longitude, \
                     icon=fc_addresses_dict[fc_address].get("icon"), icon_prefix=fc_addresses_dict[fc_address].get("icon prefix"), icon_color=fc_addresses_dict[fc_address].get("icon color"))
                 supplier.show_category = False
                 foodcoop_addresses.append(supplier)
