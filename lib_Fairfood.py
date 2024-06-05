@@ -56,10 +56,13 @@ class ScriptRun(base.Run):
         self.offers_out_of_stock = []
         self.offers_below_minimum_parcel_grm = []
         self.notifications = [] # notes for the run's info message
-        self.recipient_vat_reduced = vat.reduced(config.get("country of destination"))
-        self.recipient_vat_standard = vat.standard(config.get("country of destination"))
-        self.original_vat_reduced = vat.reduced("de")
-        self.original_vat_standard = vat.standard("de")
+        vat_collection = vat.VatCollection()
+        recipient_vat = vat_collection.find_matching_country(config.get("country of destination"))
+        original_vat = vat_collection.find_matching_country("de")
+        self.recipient_vat_reduced = recipient_vat.get_reduced()
+        self.recipient_vat_standard = recipient_vat.get_standard()
+        self.original_vat_reduced = original_vat.get_reduced()
+        self.original_vat_standard = original_vat.get_standard()
 
         self.start_driver()
 
@@ -514,7 +517,7 @@ class Offer:
                         if self.content.amount >= 2000:
                             self.name = self.name.split("(")[0] + " - Eimer"
                             unit = f"{str(self.content.amount / 1000).replace('.', ',')} kg"
-                            self.deposit = 3
+                            self.deposit = 3 * (1 + self.recipient_vat_standard / 100) / (1 + self.recipient_vat_reduced / 100)
                         else:
                             self.name = self.name.split("(")[0] + " - Beutel"
                             # unit += " Beutel"
