@@ -180,6 +180,7 @@ class ScriptRun(base.Run):
                         amount_input.clear()
                         amount_input.send_keys(str(oa.amount))
                     time.sleep(1)
+                    name, orig_name, orig_unit = self.parse_product_name()
                     buy_button = self.driver.find_element(By.XPATH, "//button[@class='btn btn-primary btn-buy']")
                     self.driver.execute_script("arguments[0].scrollIntoView();", buy_button)
                     time.sleep(1)
@@ -189,7 +190,6 @@ class ScriptRun(base.Run):
                         self.failed_articles.append(self.failed_oa_str(oa.amount, number, oa.name, oa.unit_quantity, oa.unit))
                         continue
                     time.sleep(1)
-                    name, orig_name, orig_unit = self.parse_product_name()
                     self.articles_put_in_cart.append(self.ordered_article_str(oa.amount, orig_name))
                 elif shop == "b2c":
                     self.driver.get(article_link)
