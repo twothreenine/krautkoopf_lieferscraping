@@ -72,14 +72,14 @@ class ScriptRun(base.Run):
         resort_articles_in_categories = config.get("resort articles in categories", {})
         article_details = config.get("article details", {})
         article_details_rest = config.get("article details rest", {})
-        unit_regex = r"(?:1⁄2|1⁄4|\d+),?\/?\.?\d*\s?g?\s?(?:ml.?)?(?:lt.?)?(?:d?kg ?)?(?:Kg ?)?(?:Pkg.?)?(?:pkg.?)?(?:Stk.?)?(?:stk.?)?"
+        unit_regex = r"(?!\d*\s?\%)(?:1⁄2|1⁄4|\d+),?\/?\.?\d*\s?g?\s?(?:ml.?)?(?:lt.?)?(?:d?kg ?)?(?:Kg ?)?(?:Pkg.?)?(?:pkg.?)?(?:Stk.?)?(?:stk.?)?"
 
         dfs = tabula.read_pdf(price_list_input, lattice=True, pages='all', encoding='utf-8', pandas_options={'header': None})
         raw_tables = [df.where(df.notnull(), None).values.tolist() for df in dfs]
         raw_tables.pop(0) # header table with information about the farm
         split_tables = []
         for raw_table in raw_tables:
-            if len(raw_table[0]) == 5:
+            if len(raw_table[0]) > 2:
                 split_tables.extend(self.split_table(raw_table))
             else:
                 split_tables.append(raw_table)
@@ -267,8 +267,8 @@ class ScriptRun(base.Run):
                                     elif "chips" in name:
                                         category_name = "Dörr-Obst"
                                 product_variant_names = [name]
-                                if product_variants_regex_match := re.search(r"(.*?)(\S*)\W+oder\W+(\S*)", name):
-                                    if len(product_variants_regex_match.groups()) == 3:
+                                if product_variants_regex_match := re.search(r"(.*?)(\S*)\W+(?>oder|o\.)\W+(\S*)", name):
+                                    if len(product_variants_regex_match.groups()) == 3 and "Frischkäse" not in name:
                                         product_variant_names = []
                                         name = product_variants_regex_match.group(1).strip()
                                         while name.endswith(".") or name.endswith(","):
@@ -294,8 +294,8 @@ class ScriptRun(base.Run):
                                         product_variant_names = []
                                         name = name.replace("Versch.Sorten:", "").replace("usw", "").strip()
                                         chocolate_variants = name.split(",")
-                                        if len(chocolate_variants) == 1 and "\r" in chocolate_variants[0]:
-                                            chocolate_variants = chocolate_variants[0].split("\r")
+                                        # if len(chocolate_variants) == 1 and "\r" in chocolate_variants[0]:
+                                        #     chocolate_variants = chocolate_variants[0].split("\r")
                                         for variant in chocolate_variants:
                                             variant = variant.replace("\r", " ").replace("- ", "-").strip()
                                             while variant.startswith(".") and len(variant) > 1:
