@@ -2,6 +2,6 @@
 <div>
     <details>
         <summary>{{title}}</summary>
-        <p>{{!content}}</p>
+        <p>{{ content|safe() }}</p>
     </details>
 </div>

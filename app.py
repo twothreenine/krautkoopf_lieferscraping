@@ -2,6 +2,7 @@ import flask
 import flask_login
 import re
 import os
+import copy
 import numbers
 import yaml
 import importlib
@@ -28,7 +29,7 @@ class App(flask.Flask):
         self.foodsoft_connector = None
         self.settings = base.read_settings(instance)
         self.locales = base.read_locales(instance)
-        self.locale = self.settings["default_locale"]
+        self.locale = self.settings.get("default_locale")
 
 app = App()
 app.secret_key = b'_5#y2L"F4Q8z\n\xec]/' # TODO: generate random key
@@ -70,8 +71,6 @@ def read_messages():
     return content
 
 def check_login(submitted_form, cookies, instance):
-
-
     user_data = cookies.get("user")
     if user_data:
         user_data = user_data.split("/")
@@ -133,13 +132,13 @@ def submitted_form_content(submitted_form, request_path=None):
     return submitted_form_content
 
 def login_link(instance):
-    return flask.render_template("login_link.html", instance=instance)
+    return flask.render_template('login_link.html', instance=instance)
 
 def configuration_link(configuration):
-    return flask.render_template("login_link.html", foodcoop=app.instance, configuration=configuration)
+    return flask.render_template('configuration_link.html', foodcoop=app.instance, configuration=configuration)
 
 def display_output_link(configuration, run_name):
-    return bottle.template("", foodcoop=app.instance, configuration=configuration, run_name=run_name)
+    return flask.render_template('display_output_link.html', foodcoop=app.instance, configuration=configuration, run_name=run_name)
 
 def available_scripts():
     script_files = [f for f in os.listdir() if f.startswith("script_") and f.endswith(".py")]
@@ -213,17 +212,17 @@ def output_link_with_download_button(configuration, script, run_name):
             source = zip_download(configuration, run_name)
         form_content = f"<input name='origin' value='/{app.instance}/{configuration}/display/{run_name}' hidden><input type='submit' value='⤓'>"
     progress_bar = '<progress id="run" value="{}" max="100"></progress>'.format(run.completion_percentage)
-    return bottle.template("<form action='{{source}}' method='post'>{{!form_content}} {{!affix}} {{!progress_bar}}</form>", source=source, form_content=form_content, affix=output_link, progress_bar=progress_bar)
+    return flask.render_template('output_link_with_download_button.html', source=source, form_content=form_content, affix=output_link, progress_bar=progress_bar)
 
 def all_download_buttons(configuration, run_name):
     content = ""
     path = run_path(configuration, run_name)
     files = list_files(path)
     if len(files) > 1:
-        content += bottle.template('templates/download_button.tpl', source=zip_download(configuration, run_name), value="⤓ ZIP", affix="", foodcoop=app.instance, configuration=configuration, run_name=run_name)
+        content += flask.render_template('download_button.html', source=zip_download(configuration, run_name), value="⤓ ZIP", affix="", foodcoop=app.instance, configuration=configuration, run_name=run_name)
     for file in files:
         source = "/download/data/" + app.instance + "/" + configuration + "/" + run_name + "/download/" + file
-        content += bottle.template('templates/download_button.tpl', source=source, value="⤓ " + file, affix="", foodcoop=app.instance, configuration=configuration, run_name=run_name)
+        content += flask.render_template('download_button.html', source=source, value="⤓ " + file, affix="", foodcoop=app.instance, configuration=configuration, run_name=run_name)
     return content
 
 def display(path, display_type="display"):
@@ -237,7 +236,7 @@ def display(path, display_type="display"):
                 content = convert_urls_to_links(content)
                 content = content.replace("\n", "<br>")
             title = os.path.splitext(file)[0]
-            display_content += bottle.template('templates/{}_content.tpl'.format(display_type), title=title, content=content)
+            display_content += flask.render_template('{}_content.html'.format(display_type), title=title, content=content)
     return display_content
 
 def add_input_field(ipt, script_name, input_content):
@@ -339,43 +338,43 @@ def add_config_variable_field(detail, config, config_variables, special_variable
 
 def add_instance(submitted_form):
     global app
-    new_instance_name = submitted_form.getunicode('new instance name').strip()
+    new_instance_name = submitted_form.get('new instance name').strip()
     if base.equal_strings_check([new_instance_name], base.find_instances()):
         app.messages.append(f"Es existiert bereits eine Instanz namens {new_instance_name}! Bitte wähle einen anderen Namen.")
-        return new_instance_page(submitted_form)
+        return flask.make_response(new_instance_page(submitted_form))
     else:
         settings = {
-            "description": submitted_form.getunicode('description'),
-            "default_locale": submitted_form.getunicode('locale'),
-            "foodsoft_url": submitted_form.getunicode('foodsoft url'),
+            "description": submitted_form.get('description'),
+            "default_locale": submitted_form.get('locale'),
+            "foodsoft_url": submitted_form.get('foodsoft url'),
             "configuration_groups": {}
             }
         base.save_settings(new_instance_name, settings)
         app.messages.append("Instanz angelegt.")
-        return login_page(new_instance_name)
+        return flask.make_response(login_page(new_instance_name))
 
 def add_configuration(submitted_form):
     global app
-    new_configuration_name = submitted_form.getunicode('new configuration name').strip()
+    new_configuration_name = submitted_form.get('new configuration name').strip()
     if base.equal_strings_check([new_configuration_name], base.find_configurations(foodcoop=app.instance)):
         app.messages.append("Es existiert bereits eine Konfiguration namens " + new_configuration_name + " für " + app.instance.capitalize() + ". Bitte wähle einen anderen Namen.")
-        return new_configuration_page()
+        return flask.make_response(new_configuration_page())
     else:
-        base.save_config(foodcoop=app.instance, configuration=new_configuration_name, config={"Script name": submitted_form.getunicode('script name')})
+        base.save_config(foodcoop=app.instance, configuration=new_configuration_name, config={"Script name": submitted_form.get('script name')})
         app.messages.append("Konfiguration angelegt.")
         script = import_script(configuration=new_configuration_name)
         config_variables = script.config_variables()
         if config_variables:
-            return edit_configuration_page(configuration=new_configuration_name)
+            return flask.make_response(edit_configuration_page(configuration=new_configuration_name))
         else:
-            return main_page()
+            return flask.make_response(main_page())
 
 def save_configuration_edit(configuration, submitted_form):
     config = base.read_config(foodcoop=app.instance, configuration=configuration)
     for name in submitted_form:
         if name == "configuration name" or name == "password":
             continue
-        value = submitted_form.getunicode(name)
+        value = submitted_form.get(name)
         if value:
             if value.startswith("[") and value.endswith("]"):
                 try:
@@ -398,7 +397,7 @@ def save_configuration_edit(configuration, submitted_form):
             config.pop(name)
     base.save_config(foodcoop=app.instance, configuration=configuration, config=config)
     # TODO: Renaming a configuration sometimes leads to PermissionError: [WinError 5], therefore the input field is disabled for now
-    # configuration_name = submitted_form.getunicode('configuration name')
+    # configuration_name = submitted_form.get('configuration name')
     # if configuration_name != configuration:
     #     renamed_configuration = base.rename_configuration(foodcoop=app.instance, old_configuration_name=configuration, new_configuration_name=configuration_name)
     #     if renamed_configuration:
@@ -410,7 +409,7 @@ def save_configuration_edit(configuration, submitted_form):
 
 def del_configuration(submitted_form):
     global app
-    configuration_to_delete = submitted_form.getunicode('delete configuration')
+    configuration_to_delete = submitted_form.get('delete configuration')
     success, feedback = base.delete_configuration(app.instance, configuration_to_delete)
     if success:
         app.messages.append(configuration_to_delete + " erfolgreich gelöscht.")
@@ -418,7 +417,7 @@ def del_configuration(submitted_form):
         app.messages.append(feedback)
     else:
         app.messages.append("Löschen von " + configuration_to_delete + " fehlgeschlagen: Konfiguration scheint nicht zu existieren.")
-    return main_page()
+    return flask.make_response(main_page())
 
 def root_page():
     instances_content = ""
@@ -432,10 +431,10 @@ def new_instance_page(submitted_form=None):
     url_value = ""
     locale_value = ""
     if submitted_form:
-        name_value = submitted_form.getunicode("new instance name")
-        description_value = submitted_form.getunicode("description")
-        url_value = submitted_form.getunicode("foodsoft url")
-        locale_value = submitted_form.getunicode("locale")
+        name_value = submitted_form.get("new instance name")
+        description_value = submitted_form.get("description")
+        url_value = submitted_form.get("foodsoft url")
+        locale_value = submitted_form.get("locale")
 
     locale_options = ""
     available_locales = base.find_available_locales()
@@ -445,7 +444,7 @@ def new_instance_page(submitted_form=None):
             selected = " selected"
         locale_options += f"<option{selected}>{loc}</option>"
 
-    return bottle.template('templates/new_instance.tpl', messages=read_messages(), name_value=name_value, description_value=description_value, url_value=url_value, locale_options=locale_options)
+    return flask.render_template('new_instance.html', messages=read_messages(), name_value=name_value, description_value=description_value, url_value=url_value, locale_options=locale_options)
 
 def main_page():
     content = ""
@@ -461,10 +460,10 @@ def login_page(fc, request_path=None, submitted_form=None):
         request_path = "/" + fc
     global app
     if app.foodsoft_connector and app.instance != fc:
-        return switch_instance_page(fc, request_path, submitted_form)
+        return flask.make_response(switch_instance_page(fc, request_path, submitted_form))
     else:
         app.switch_to_instance(fc)
-        foodsoft_address = app.settings.get("foodsoft_url")
+        foodsoft_address = app.settings.get("foodsoft_url", "")
         foodsoft_login_address = foodsoft_address
         if not foodsoft_login_address.endswith("/"):
             foodsoft_login_address += "/"
@@ -473,7 +472,7 @@ def login_page(fc, request_path=None, submitted_form=None):
         return flask.render_template('login.html', messages=read_messages(), request_path=request_path, submitted_form_content=submitted_form_content(submitted_form), foodcoop=app.instance.capitalize(), foodsoft_address=foodsoft_address, foodsoft_login_address=foodsoft_login_address, description=description)
 
 def switch_instance_page(requested_instance, request_path=None, submitted_form=None):
-    return bottle.template('templates/switch_instance.tpl', requested_instance=requested_instance, current_instance=app.instance, submitted_form_content=submitted_form_content(submitted_form, request_path))
+    return flask.render_template('switch_instance.html', requested_instance=requested_instance, current_instance=app.instance, submitted_form_content=submitted_form_content(submitted_form, request_path))
 
 def configuration_page(configuration):
     config = base.read_config(foodcoop=app.instance, configuration=configuration)
@@ -500,7 +499,7 @@ def configuration_page(configuration):
         else:
             config_content += get_locale_string(term=str(detail), substring='name', script_name=script_name, enforce_return=True) + ": " + str(config[detail])
 
-    return bottle.template('templates/configuration.tpl', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), configuration=configuration, output_content=output_content, config_content=config_content)
+    return flask.render_template('configuration.html', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), configuration=configuration, output_content=output_content, config_content=config_content)
 
 def run_page(configuration, script, run):
     downloads = all_download_buttons(configuration, run.name)
@@ -524,11 +523,11 @@ def run_page(configuration, script, run):
         inputs = ""
         for ipt in option.inputs:
             inputs = add_input_field(ipt=ipt, script_name=script_name, input_content=inputs)
-        continue_content += bottle.template('templates/continue_option.tpl', fc=app.instance, configuration=configuration, run_name=run.name, option_name=option.name, option_locales=option_locales, inputs=inputs)
+        continue_content += flask.render_template('continue_option.html', fc=app.instance, configuration=configuration, run_name=run.name, option_name=option.name, option_locales=option_locales, inputs=inputs)
     display_content = ""
     display_content += display(path=run.path, display_type="display")
     display_content += display(path=run.path, display_type="details")
-    return bottle.template('templates/run.tpl', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), configuration=configuration, run=run, log_text=log_text, completion_percentage=run.completion_percentage, downloads=downloads, continue_content=continue_content, display_content=display_content)
+    return flask.render_template('run.html', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), configuration=configuration, run=run, log_text=log_text, completion_percentage=run.completion_percentage, downloads=downloads, continue_content=continue_content, display_content=display_content)
 
 def edit_configuration_page(configuration):
     config_content = ""
@@ -567,30 +566,30 @@ def edit_configuration_page(configuration):
 
     number_of_runs_to_list = base.read_in_config(config, "number of runs to list", 5)
 
-    return bottle.template('templates/edit_configuration.tpl', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), base_locales=app.locales["base"], configuration=configuration, number_of_runs_to_list=number_of_runs_to_list, config_content=config_content, script_options=script_options(selected_script=config["Script name"]))
+    return flask.render_template('edit_configuration.html', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), base_locales=app.locales["base"], configuration=configuration, number_of_runs_to_list=number_of_runs_to_list, config_content=config_content, script_options=script_options(selected_script=config["Script name"]))
 
 def delete_configuration_page(configuration):
-    return bottle.template('templates/delete_configuration.tpl', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), configuration=configuration)
+    return flask.render_template('delete_configuration.html', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), configuration=configuration)
 
 def new_configuration_page():
-    return bottle.template('templates/new_configuration.tpl', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), script_options=script_options())
+    return flask.render_template('new_configuration.html', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), script_options=script_options())
 
 @app.route('/', methods=HTTP_METHODS)
 def root():
     submitted_form = flask.request.form
     if 'new instance' in submitted_form:
-        return new_instance_page()
+        return flask.make_response(new_instance_page())
     elif 'new instance name' in submitted_form:
         return add_instance(submitted_form)
     else:
-        return root_page()
+        return flask.make_response(root_page())
 
 @app.get('/<fc>')
 def login(fc):
     if check_login(flask.request.form, flask.request.cookies, fc):
-        return main_page()
+        return flask.make_response(main_page())
     else:
-        return login_page(fc)
+        return flask.make_response(login_page(fc))
 
 @app.post('/<fc>')
 def do_main(fc):
@@ -602,9 +601,9 @@ def do_main(fc):
         app.messages.append("Logout erfolgreich.")
         request_path = submitted_form.get("request_path")
         if request_path:
-            return login_page(fc, request_path)
+            return flask.make_response(login_page(fc, request_path))
         else:
-            return root_page()
+            return flask.make_response(root_page())
     elif check_login(submitted_form, flask.request.cookies, fc):
         if 'new configuration' in submitted_form:
             resp = flask.make_response(new_configuration_page())
@@ -617,31 +616,31 @@ def do_main(fc):
         resp.set_cookie("user", f"{fc}/{app.foodsoft_connector.user}")
         return resp
     else:
-        return login_page(fc)
+        return flask.make_response(login_page(fc))
 
 @app.route('/<fc>/<configuration>', methods=HTTP_METHODS)
 def configuration(fc, configuration):
     global app
-    submitted_form = bottle.request.forms
-    if check_login(submitted_form, fc):
+    submitted_form = flask.request.form
+    if check_login(submitted_form, flask.request.cookies, fc):
         if "Script name" in submitted_form:
             configuration = save_configuration_edit(configuration=configuration, submitted_form=submitted_form)
             app.messages.append("Änderungen in Konfiguration gespeichert.")
-        return configuration_page(configuration)
+        return flask.make_response(configuration_page(configuration))
     else:
-        return login_page(fc, bottle.request.path, submitted_form)
+        return flask.make_response(login_page(fc, flask.request.full_path, submitted_form))
 
 @app.route('/<fc>/<configuration>/display/<run_name>', methods=HTTP_METHODS)
 def display_run(fc, configuration, run_name):
     global app
-    submitted_form = bottle.request.forms
-    if check_login(submitted_form, fc):
+    submitted_form = flask.request.form
+    if check_login(submitted_form, flask.request.cookies, fc):
         importlib.invalidate_caches()
         script = import_script(configuration=configuration)
         path = run_path(configuration, run_name)
         run = script.ScriptRun.load(path=path)
         if "method" in submitted_form:
-            method = submitted_form.getunicode('method')
+            method = submitted_form.get('method')
             parameters = {}
             # script_method = getattr(script, method)
             script_method = [sm for sm in run.next_possible_methods if sm.name == method][0]
@@ -649,17 +648,17 @@ def display_run(fc, configuration, run_name):
                 for ipt in script_method.inputs:
                     value = None
                     if ipt.input_format == "files":
-                        files = bottle.request.files.getall(ipt.name)
+                        files = flask.request.files.getall(ipt.name)
                         for f in files:
-                            print(f.content_type) # TODO: check if mime type matches accepted file types
-                        value = [f.file for f in files]
+                            print(f.content_type) # TODO: check if mime type matches accepted file types & TODO: test multi-file upload
+                        value = copy.deepcopy(files)
                     elif ipt.accepted_file_types or ipt.input_format == "file":
-                        file_object = bottle.request.files.get(ipt.name)
+                        file_object = flask.request.files.get(ipt.name)
                          # TODO: check if mime type matches accepted file types
                         if file_object:
-                            value = file_object.file
+                            value = file_object
                     else:
-                        value = submitted_form.getunicode(ipt.name)
+                        value = submitted_form.get(ipt.name)
                     if value:
                         parameters[ipt.name] = value
             func = getattr(run, method)
@@ -667,58 +666,44 @@ def display_run(fc, configuration, run_name):
             run.save()
             script_name = base.read_in_config(base.read_config(fc, configuration), "Script name")
             app.messages.append(app.locales[script_name][method]["name"] + " wurde ausgeführt.")
-        return run_page(configuration, script, run)
+        return flask.make_response(run_page(configuration, script, run))
     else:
-        return login_page(fc, bottle.request.path, submitted_form)
+        return flask.make_response(login_page(fc, flask.request.full_path, submitted_form))
 
 @app.route('/<fc>/<configuration>/new_run', methods=HTTP_METHODS)
 def start_script_run(fc, configuration):
-    submitted_form = bottle.request.forms
-    if check_login(submitted_form, fc):
+    submitted_form = flask.request.form
+    if check_login(submitted_form, flask.request.cookies, fc):
         importlib.invalidate_caches()
         script = import_script(configuration=configuration)
         run = script.ScriptRun(foodcoop=app.instance, configuration=configuration)
         run.save()
-        return run_page(configuration, script, run)
+        return flask.make_response(run_page(configuration, script, run))
     else:
-        return login_page(fc, bottle.request.path, submitted_form)
+        return flask.make_response(login_page(fc, flask.request.full_path, submitted_form))
 
 @app.route('/<fc>/<configuration>/edit', methods=HTTP_METHODS)
 def edit_configuration(fc, configuration):
-    submitted_form = bottle.request.forms
-    if check_login(submitted_form, fc):
-        return edit_configuration_page(configuration)
+    submitted_form = flask.request.form
+    if check_login(submitted_form, flask.request.cookies, fc):
+        return flask.make_response(edit_configuration_page(configuration))
     else:
-        return login_page(fc, bottle.request.path)
+        return flask.make_response(login_page(fc, flask.request.full_path))
 
 @app.route('/<fc>/<configuration>/delete', methods=HTTP_METHODS)
 def delete_configuration(fc, configuration):
-    submitted_form = bottle.request.forms
-    if check_login(submitted_form, fc):
-        return delete_configuration_page(configuration)
+    submitted_form = flask.request.form
+    if check_login(submitted_form, flask.request.cookies, fc):
+        return flask.make_response(delete_configuration_page(configuration))
     else:
-        return login_page(fc, bottle.request.path, submitted_form)
+        return flask.make_response(login_page(fc, flask.request.full_path, submitted_form))
 
-# @app.route('/download/<filename:path>', methods=HTTP_METHODS)
-# def download(filename):
-#     submitted_form = bottle.request.forms
-#     dir_array = os.path.normpath(filename).split(os.path.sep)
-#     fc = dir_array[1]
-#     if check_login(submitted_form, fc):
-#         return bottle.static_file(filename, root="", download=filename)
-#     else:
-#         return login_page(fc=fc, request_path=submitted_form.getunicode("origin"))
-
-# app.url_for("static", filename='styles.css')
-
-# @app.route("/templates/styles.css")
-# def send_css():
-#     return bottle.static_file(filename, root="templates")
-
-# @app.get('/media/:path#.+#')
-# def server_static(path):
-#     return bottle.static_file(path, root="media")
-
-# @app.get('/favicon.ico')
-# def get_favicon():
-#     return server_static('favicon.ico')
+@app.route('/download/<path:filepath>', methods=HTTP_METHODS)
+def download(filepath):
+    submitted_form = flask.request.form
+    dir_array = os.path.normpath(filepath).split(os.path.sep)
+    fc = dir_array[1]
+    if check_login(submitted_form, flask.request.cookies, fc):
+        return flask.send_from_directory(directory="", path=filepath)
+    else:
+        return flask.make_response(login_page(fc=fc, request_path=submitted_form.get("origin")))

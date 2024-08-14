@@ -2,7 +2,7 @@
 <html>
     <head>
         <title>{{foodcoop}} Lieferscraping - {{configuration}}</title>
-        % include("templates/header.tpl")
+        {% include "header.html" %}
     </head>
 
     <body>
@@ -14,11 +14,11 @@
                 <label>{{base_locales["configuration name"]}}: <input name="configuration name" type="text" value="{{configuration}}" disabled></label><br/>
                 <label>{{base_locales["Script name"]}}: 
                     <select name="Script name" required>
-                        {{!script_options}}
+                        {{ script_options|safe() }}
                     </select>
                 </label><br/>
                 <label>{{base_locales["number of runs to list"]}}: <input name="number of runs to list" type="number" value="{{number_of_runs_to_list}}" required></label><br/>
-                {{!config_content}}
+                {{ config_content|safe() }}
                 <br><br>
                 <input type="submit" value="Speichern">
             </form>

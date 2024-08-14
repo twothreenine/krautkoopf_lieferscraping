@@ -2,7 +2,7 @@
 <html>
     <head>
         <title>{{foodcoop}} Lieferscraping - Neue Konfiguration</title>
-        % include("templates/header.tpl")
+        {% include "header.html" %}
     </head>
 
     <body>
@@ -13,7 +13,7 @@
             <form action="/{{fc}}" method="post">
                 <p><input name="new configuration name" type="text" placeholder="Name" required></p>
                 <p><select name="script name" required>
-                    {{!script_options}}
+                    {{ script_options|safe() }}
                 </select></p>
                 <br><br>
                 <input type="submit" value="Konfiguration anlegen">

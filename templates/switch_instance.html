@@ -2,7 +2,7 @@
 <html>
     <head>
         <title>{{current_instance}} Lieferscraping - Instanz wechseln?</title>
-        % include("templates/header.tpl")
+        {% include "header.html" %}
     </head>
 
     <body>
@@ -10,7 +10,7 @@
             <h1>Instanz wechseln?</h1>
             <p>Du versuchst die Instanz {{requested_instance}} aufzurufen, obwohl du gerade in der Instanz {{current_instance}} angemeldet bist.</p>
             <form action="/{{requested_instance}}" method="post">
-                {{!submitted_form_content}}
+                {{ submitted_form_content|safe() }}
                 <input name="logout" value="Von {{current_instance}} abmelden" type="submit" />
             </form>
             <br>
