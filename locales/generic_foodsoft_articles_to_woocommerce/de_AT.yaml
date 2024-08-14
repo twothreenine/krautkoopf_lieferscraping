@@ -1,0 +1,37 @@
+# variables
+# test variable:
+#     name: Test-Variable
+# test variable 2:
+#     name: Test-Variable 2
+#     description: nicht wirklich verwendet, nur zur Demonstration
+
+# log
+products collected: "Produkte aus Foodsoft gesammelt"
+imported to woocommerce: "in WooCommerce importiert"
+
+# methods
+collect_products_and_import_to_woocommerce:
+    name: Produkte aus Foodsoft sammeln & direkt importieren
+    description: Hiermit werden Bestell- und Lagerartikel aus der verknüpften Foodsoft-Instanz ausgelesen, zu WooCommerce-Produkten umgewandelt, mit den zuletzt gesammelten und den aktuell in der verknüpften WooCommerce-Seite hochgeladenen verglichen, manuelle Änderungen gespeichert und die Produkte in WooCommerce aktualisiert.
+
+collect_products:
+    name: Produkte aus Foodsoft sammeln
+    description: Hiermit werden Bestell- und Lagerartikel aus der verknüpften Foodsoft-Instanz ausgelesen, zu WooCommerce-Produkten umgewandelt und in dieser Ausführung zwischengespeichert.
+
+import_to_woocommerce:
+    name: Produkte in WooCommerce importieren
+    description: Hiermit werden die gesammelten Produkte mit den zuletzt gesammelten und den aktuell in der verknüpften WooCommerce-Seite hochgeladenen verglichen, manuelle Änderungen gespeichert und die Produkte in WooCommerce aktualisiert.
+
+# inputs
+consumer_key:
+    name: Consumer key
+    description: für WooCommerce API
+consumer_secret:
+    name: Consumer secret
+    description: für WooCommerce API
+
+# other locales
+collected products summary: "{number_of_collected_products} Produkte von {number_of_suppliers} Lieferant*innen gesammelt, davon {number_of_order_products} Bestellartikel und {number_of_stock_products} Lagerartikel."
+updated categories summary: "{number_of_created_categories} Produktkategorien in WooCommerce neu erstellt, {number_of_updated_categories} angepasst und {number_of_deleted_categories} gelöscht."
+updated products summary: "{number_of_created_products} Produkte in WooCommerce neu erstellt, {number_of_updated_products} angepasst und {number_of_deleted_products} gelöscht."
+keeping manual change: "Manuelle Änderung gespeichert"

@@ -1,15 +1,6 @@
 # variables
 Foodsoft supplier ID:
     name: "ID von Lieferant*in in Foodsoft"
-country of destination:
-    name: "Zielland"
-    description: "Land, in welches die Ware geliefert werden soll (wichtig für USt-Berechnung)"
-categories to ignore:
-    name: "Zu ignorierende Kategorien"
-subcategories to ignore:
-    name: "Zu ignorierende Unterkategorien"
-articles to ignore:
-    name: "Zu ignorierende Artikel"
 message prefix:
     name: "Text, der der Zusammenfassung vorangestellt wird"
 
@@ -21,16 +12,10 @@ marked as imported: "als hochgeladen markiert"
 # methods
 read_webshop:
     name: "Webshop auslesen"
-    description: "Hiermit wird der Webshop ausgelesen und die ausgelesenen Daten zur weiteren Verarbeitung in dieser Ausführung zwischengespeichert. Gib die Zugangsdaten deiner FoodCoop zum Webshop ein, um ggf. auch die B2B-Angebote auszulesen."
+    description: "Hiermit wird der Webshop ausgelesen und die ausgelesenen Daten zur weiteren Verarbeitung in dieser Ausführung zwischengespeichert. Dieser Vorgang dauert ein paar Minuten."
 generate_csv:
     name: "CSV generieren"
     description: "Hiermit werden die ausgelesenen Artikeldaten mit denen aus der Foodsoft sowie den zuletzt hochgeladenen verglichen und eine CSV-Datei zum Hochladen in die Foodsoft generiert."
 mark_as_imported:
     name: "Als hochgeladen markieren"
     description: "Hiermit wird diese CSV als zuletzt hochgeladene Artikelliste markiert. Dies ist wichtig beim nächsten Auslesen, damit manuelle Änderungen in der Foodsoft beim Import bzw. danach erkannt werden können. Wenn die Datei nicht hochgeladen wird, diesen Schritt also auslassen!"
-
-# inputs
-email:
-    name: "E-Mail-Adresse"
-password:
-    name: "Passwort"

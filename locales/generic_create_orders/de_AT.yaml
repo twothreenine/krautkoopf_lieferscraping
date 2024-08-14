@@ -1,9 +1,45 @@
 # variables
-# test variable:
-#     name: Test-Variable
-# test variable 2:
-#     name: Test-Variable 2
-#     description: nicht wirklich verwendet, nur zur Demonstration
+Foodsoft supplier ID:
+    name: "ID von Lieferant*in in Foodsoft"
+min interval:
+    name: Min. Intervall
+    description: zwischen Bestellungs-Enden, in Tagen
+order start time:
+    name: Uhrzeit für Bestellungsstart
+order end weekdays:
+    name: Wochentage für Bestellungs-Ende
+    description: Ein oder mehrere Wochentage, an denen die Bestellung enden kann
+order end time:
+    name: Uhrzeit für Bestellungsende
+min order duration:
+    name: Mindestdauer der Bestellung
+    description: Bestellungs-Enddatum wird so ausgewählt, dass Bestellung mindestens x Tage offen ist
+max order duration:
+    name: Maximaldauer der Bestellung
+    description: Bestellungs-Startdatum wird x Tage vor Enddatum gesetzt
+delivery duration:
+    name: Dauer der Lieferung
+    description: Abholdatum wird x Tage nach Enddatum gesetzt
+auto close:
+    name: Automatisch beenden
+auto send:
+    name: Automatisch abschicken
+    description: "Nur wenn 'automatisch beenden' aktiviert"
+ignore minimum quantity:
+    name: Mindestbestellmenge ignorieren
+    description: "Bestellung auch abschicken, wenn Mindestbestellmenge nicht erreicht wurde. Nur wenn 'automatisch beenden' und 'automatisch abschicken' aktiviert"
+note:
+    name: Notiz
+send message:
+    name: Nachricht ausschicken
+    description: Ob eine Nachricht an alle Foodsoft-Mitglieder ausgeschickt werden soll
+message subject:
+    name: Betreff für Nachricht
+message content top:
+    name: Nachrichteninhalt-Oberteil
+message content bottom:
+    name: Nachrichteninhalt-Unterteil
+    description: Eine Leerzeile zwischen Oberteil und Unterteil wird automatisch eingefügt.
 
 # log
 orders prepared: "Bestellung(en) vorbereitet"
@@ -12,19 +48,33 @@ orders created: "Bestellung(en) angelegt"
 # methods
 create_orders_directly:
     name: "Bestellung(en) direkt anlegen"
-    description: ""
+    description: "Die zu erstellenden Bestellungen werden ermittelt und direkt erstellt. Falls aktiviert, wird eine Nachricht an alle Foodsoft-Mitglieder ausgeschickt."
 
 prepare_orders:
     name: "Bestellung(en) vorbereiten"
-    description: ""
+    description: "Die zu erstellenden Bestellungen werden ermittelt und aufgelistet. Im nächsten Schritt können sie überprüft und erstellt werden."
 
 create_prepared_orders:
     name: "Vorbereitete Bestellung(en) anlegen"
-    description: ""
+    description: "Die aufgelisteten Bestellungen werden erstellt. Falls aktiviert, wird eine Nachricht an alle Foodsoft-Mitglieder ausgeschickt."
 
 # inputs
 create_orders_till:
     name: "Bestellungen bis"
+    description: "Bestellungen mit Enddatum bis zu diesem Datum werden erstellt (ggf. mehr als bei Anzahl Bestellungen angegeben)."
 
 create_orders_from:
     name: "Bestellungen ab"
+    description: "Bestellungen mit Enddatum ab diesem Datum werden erstellt. Falls leer, ab heute."
+
+number_of_orders_to_create:
+    name: "Anzahl Bestellungen"
+    description: Wie viele Bestellungen angelegt werden sollen (ggf. mehr als durch "Bestellungen bis" festgelegt). Falls leer, wird genau eine Bestellung erstellt.
+
+message_subject_suffix:
+    name: "Nachrichtenbetreff-Zusatz"
+    description: "Text, der dem Betreff der Nachricht (falls in der Konfiguration aktiviert) angehängt wird."
+
+message_extra_content:
+    name: "Nachrichteninhalt-Zusatz"
+    description: "Text, der der Nachricht (falls in der Konfiguration aktiviert) zugefügt wird, zwischen Nachrichteninhalt-Oberteil und -Unterteil."

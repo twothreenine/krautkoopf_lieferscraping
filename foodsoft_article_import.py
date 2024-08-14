@@ -127,7 +127,7 @@ def compare_string(locales, article, article_from_last_run, article_from_foodsof
             setattr(article, string_type, manual_string)
     return article, configuration_config
 
-def get_articles_from_foodsoft(locales, supplier_id, foodsoft_connector=None, version_delimiter=None, prefix_delimiter=None, notifications=None):
+def get_articles_from_foodsoft(locales, supplier_id, foodsoft_connector=None, version_delimiter=None, prefix_delimiter=None, skip_unavailable_articles=False, notifications=None):
     # Connect to your Foodsoft instance and download the articles CSV of the supplier
 
     if not notifications:
@@ -137,7 +137,7 @@ def get_articles_from_foodsoft(locales, supplier_id, foodsoft_connector=None, ve
         # fsc = foodsoft.FSConnector(url=foodsoft_url, user=foodsoft_user, password=foodsoft_password)
         csv_from_foodsoft = csv.reader(foodsoft_connector.get_articles_CSV(supplier_id=supplier_id).splitlines(), delimiter=';')
         # fsc.logout()
-        articles_from_foodsoft = foodsoft_article.read_articles_from_csv(csv=csv_from_foodsoft, version_delimiter=version_delimiter, prefix_delimiter=prefix_delimiter)
+        articles_from_foodsoft = foodsoft_article.read_articles_from_csv(csv=csv_from_foodsoft, version_delimiter=version_delimiter, prefix_delimiter=prefix_delimiter, skip_unavailable_articles=skip_unavailable_articles)
     else:
         articles_from_foodsoft = []
         warning = locales["foodsoft_article_import"].get("comparing manual changes failed due to missing foodsoft connector")
@@ -325,7 +325,7 @@ def recalculate_unit_for_article(article, category_names, recalculate_units):
                     matching = True
 
             if matching:
-                article_name_with_base_price = article.name + f" ({base_price_str(article_price=article.price_net, base_unit=article.unit)})"
+                article_name_with_base_price = article.name + f" ({base_price_str(article_price=article.price_net, base_unit=article.unit, vat=article.vat)})"
                 for replacement_unit_str, replacement_unit_factor in recalculate_units[subdict].get("replacement units", {}).items():
                     article_in_replacement_unit = copy.deepcopy(article)
                     article_in_replacement_unit = replace_unit(article=article_in_replacement_unit, replacement_unit_str=replacement_unit_str, replacement_unit_factor=replacement_unit_factor)
@@ -337,12 +337,68 @@ def recalculate_unit_for_article(article, category_names, recalculate_units):
         articles = [article]
     return articles
 
-def base_price_str(article_price, base_unit):
+def create_loose_offer(article, product, create_loose_offers, category_names=None, amount_mode=False):
+    """
+    Transforms an article with a single unit (unit_quantity = 1) into an article consisting of parcels.
+    E.g. a bag of 5 kg into 10 x 0.5 kg, to allow order groups to order smaller amounts.
+    category_names is expected to be a list (e.g. [original_category, renamed_category]).
+    create_loose_offers is expected to be a dictionary of the following layout ... TODO
+    amount_mode: If True, then article.amount is transformed instead of article.unit. article.amount is expected to be a float in the base unit (e.g. 0.5 for 0.5 kg).
+
+
+    """
+
+    for subdict in create_loose_offers:
+        pass # TODO
+
+def resort_articles_in_categories(article_name, category_name, resort_articles_in_categories, return_original=True):
+    """
+    Delivers an alternative category name based on the config item resort_articles_in_categories.
+    resort_articles_in_categories is expected to be a dictionary of the following layout:
+    {"Kategorie 1": {"exact": False, "case-sensitive": False, "original categories": ["Obst & Gemüse", "Äpfel"], "target categories": {"Fruchtgemüse": ["Zucchini", "tomate"]}, "rest": "Sonstiges"}}
+    Or in yaml style:
+    Kategorie 1:
+        exact: False            # default False
+        case-sensitive: False   # default False
+        original categories:    # category_name is checked for matches in these strings
+        - Obst & Gemüse
+        - Äpfel
+        target categories:
+            Fruchtgemüse:
+            - Zucchini          # if article_name matches this string, "Fruchtgemüse" will be returned as new category name
+            - tomate
+        rest: Sonstiges         # if neither "Zucchini" nor "tomate" is found in article_name, "Sonstiges" will be returned as new category name
+
+    You can choose if you want to use "target categories" and/or "rest", both are optional.
+    If "rest" is not specified and none of the target categories' strings match, the original category_name will be returned, unless return_original is set to False, then None will be returned.
+    """
+    for resort_category in resort_articles_in_categories:
+        exact = resort_articles_in_categories[resort_category].get("exact")
+        case_sensitive = resort_articles_in_categories[resort_category].get("case-sensitive")
+        if exact:
+            if base.equal_strings_check(list1=[category_name], list2=resort_articles_in_categories[resort_category].get("original categories", []), case_sensitive=case_sensitive):
+                for target_category, target_category_products in resort_articles_in_categories[resort_category].get("target categories", {}).items():
+                    if base.equal_strings_check(list1=[article_name], list2=target_category_products, case_sensitive=case_sensitive):
+                        return target_category
+                if rest_category := resort_articles_in_categories[resort_category].get("rest"):
+                    return rest_category
+        else:
+            if base.containing_strings_check(list1=[category_name], list2=resort_articles_in_categories[resort_category].get("original categories", []), case_sensitive=case_sensitive):
+                for target_category, target_category_products in resort_articles_in_categories[resort_category].get("target categories", {}).items():
+                    if base.containing_strings_check(list1=[article_name], list2=target_category_products, case_sensitive=case_sensitive):
+                        return target_category
+                if rest_category := resort_articles_in_categories[resort_category].get("rest"):
+                    return rest_category
+    if return_original:
+        return category_name
+
+def base_price_str(article_price, base_unit, vat=0):
     # used in combination with recalculate_unit_for_article
     if article_price:
-        return f"{'{:.2f}'.format(article_price)} €/{base_unit}".replace(".", ",")
+        gross_price = article_price + article_price * vat / 100
+        return f"{'{:.2f}'.format(round(gross_price, 2)).replace('.', ',')} € / {base_unit}"
     else:
-        return f"? €/{base_unit}"
+        return f"? € / {base_unit}"
 
 def replace_unit(article, replacement_unit_str, replacement_unit_factor):
     # used in combination with recalculate_unit_for_article
@@ -397,8 +453,6 @@ def get_data_from_articles(locales, articles, notifications, version_delimiter=N
     return rows, notifications
 
 def compose_articles_csv_message(locales, supplier, foodsoft_url=None, supplier_id=None, categories=None, ignored_categories=None, ignored_subcategories=None, ignored_articles=None, notifications=None, prefix=""):
-    # TODO: use locales
-
     text = ""
     if prefix:
         text += prefix + "\n\n"

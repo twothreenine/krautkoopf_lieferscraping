@@ -57,7 +57,7 @@ class ScriptRun(base.Run):
             website_fields=base.read_in_config(config, "supplier website field(s)", []), \
             category_fields=base.read_in_config(config, "supplier category field(s)", []), \
             additional_fields=additional_supplier_fields, exclude_categories=base.read_in_config(config, "exclude supplier categories", []))
-        locator = Nominatim(user_agent="myGeocoder")
+        locator = Nominatim(user_agent=f"{self.foodcoop} geolocator")
 
         foodcoop_addresses = []
         fc_addresses_dict = base.read_in_config(config, "foodcoop addresses", {})
@@ -66,8 +66,9 @@ class ScriptRun(base.Run):
             location = locator.geocode(address)
             if location:
                 # reusing the Supplier class here, although these are not actually suppliers
-                supplier = foodsoft.Supplier(name=fc_address, address=address, additional_fields=[{"value": fc_addresses_dict[fc_address].get("description")}], latitude=location.latitude, longitude=location.longitude, \
+                supplier = foodsoft.Supplier(no=0, name=fc_address, address=address, additional_fields=[{"value": fc_addresses_dict[fc_address].get("description")}], latitude=location.latitude, longitude=location.longitude, \
                     icon=fc_addresses_dict[fc_address].get("icon"), icon_prefix=fc_addresses_dict[fc_address].get("icon prefix"), icon_color=fc_addresses_dict[fc_address].get("icon color"))
+                supplier.show_category = False
                 foodcoop_addresses.append(supplier)
 
         supplier_name_prefix_delimiters = base.read_in_config(config, "supplier name prefix delimiters", [])
@@ -77,6 +78,7 @@ class ScriptRun(base.Run):
         style_by_supplier_category = base.read_in_config(config, "style by supplier category", {})
 
         for supplier in suppliers:
+            supplier.show_category = False
             location = locator.geocode(supplier.address)
             if location:
                 supplier.latitude = location.latitude
@@ -94,6 +96,9 @@ class ScriptRun(base.Run):
                     supplier.icon_prefix = style_by_supplier_category[supplier.category].get('icon prefix')
                     supplier.icon_color = style_by_supplier_category[supplier.category].get('icon color')
                     supplier.show_category = style_by_supplier_category[supplier.category].get('show category')
+                else:
+                    suppliers.remove(supplier)
+                    print(f'No icon style found for category "{supplier.category}", supplier {supplier.name} removed from map.')
             else:
                 suppliers.remove(supplier)
                 print(f"Location of supplier {supplier.name} not found ({supplier.address}), supplier removed from map.")
@@ -129,8 +134,9 @@ class ScriptRun(base.Run):
         self.completion_percentage = 100
         self.log.append(base.LogEntry(action="executed", done_by=base.full_user_name(session)))
 
-def popup_html(supplier, show_category=False):
+def popup_html(supplier):
     # TODO: custom CSS (or in map?)
+    print(supplier.name)
     html = f"<h4>{supplier.name}</h4><p><label>📍</label> {supplier.address}</p>"
     if supplier.website:
         html += f"<p><label>🌐</label> <a href='{supplier.website}' target='_blank'>{supplier.website}</a></p>"

@@ -36,7 +36,7 @@ babel (for web interface)
 
 webdriver-manager 3.5.3+ (for Fairfood script)
 
-selenium 4.1.3+ (for Fairfood script)
+selenium 4.1.3+ (for Fairfood, Müllner scripts)
 
 geopy 2.2.0+ (for supplier map script)
 
@@ -44,9 +44,13 @@ folium 0.12.1.post1+ (for supplier map script)
 
 openpyxl 3.0.10+ (for Apfelland & HolperHof scripts)
 
-tabula-py 2.5.1+ (for Lebenbauer & Renner scripts)
+tabula-py 2.5.1+ (for Lebenbauer & Renner scripts, requires Java 8+)
 
 pandas 1.5.0+ (for Lebenbauer & Renner scripts)
+
+woocommerce 3.0.0+ (for Foodsoft articles to WooCommerce script)
+
+undetected-chromedriver 3.5.5 (for Müllner script)
 
 ## Details
 Da es in unserer Foodcoop Bedarf gab, den regelmäßigen Aufwand für das Bestellteam zu senken, habe ich ein Python-Skript geschrieben, das sämtliche Artikel einer bestimmten Lieferant_in ausliest (z.B. per Screenscraping aus dem Webshop, aus einer Exceltabelle wäre aber auch denkbar) und daraus eine CSV generiert, die in die Foodsoft importiert werden kann.

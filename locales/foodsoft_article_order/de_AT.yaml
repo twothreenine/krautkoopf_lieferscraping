@@ -1,0 +1,6 @@
+order processed: "Die <a href='{order_url}' target='_blank'>Bestellung</a> wurde verarbeitet."
+articles put in cart: "Folgende Artikel wurden in den Warenkorb gelegt"
+articles to order manually: "Folgende Artikel müssen manuell bestellt werden"
+articles not available: "Folgende Artikel sind nicht verfügbar"
+failed articles: "Für folgende Artikel ist die Bestellung fehlgeschlagen"
+notifications: "Hinweise"

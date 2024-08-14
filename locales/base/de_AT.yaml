@@ -2,6 +2,8 @@
 member: "{foodcoop}-Mitglied"
 script configurations: Skript-Konfigurationen
 none (feminine): keine
+summary: Zusammenfassung
+notifications: Hinweise
 
 # variables
 configuration name: "Name der Konfiguration"

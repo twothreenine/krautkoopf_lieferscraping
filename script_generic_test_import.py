@@ -9,7 +9,7 @@ import foodsoft_article
 import foodsoft_article_import
 
 # Inputs this script's methods take
-test_input = base.Input(name="test_input", required=False, example="bla bla")
+test_input = base.Input(name="test_input", required=False, input_format="textarea")
 test_file_input = base.Input(name="test_file_input", required=False, accepted_file_types=[".csv"], input_format="files")
 
 # Executable script methods
@@ -37,7 +37,8 @@ class ScriptRun(base.Run):
         articles.append(test)
         notifications = foodsoft_article_import.write_articles_csv(locales=session.locales, file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_articles_" + self.name), articles=articles)
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Summary"), content=foodsoft_article_import.compose_articles_csv_message(locales=session.locales, supplier=self.configuration, notifications=notifications))
-        base.write_txt(file_path=base.file_path(path=self.path, folder="details", file_name="Log"), content="")
+        base.write_txt(file_path=base.file_path(path=self.path, folder="details", file_name="Log"), content=test_input)
+        print(test_file_input)
         self.next_possible_methods = [finish]
         self.completion_percentage = 80
         self.log.append(base.LogEntry(action="executed", done_by=base.full_user_name(session)))
