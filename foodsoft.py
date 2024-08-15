@@ -120,7 +120,7 @@ class FSConnector:
     def login(self, user, password):
         self._user = user
         self._login_data['nick'] = user
-        self._login_data['password'] = password
+        self._login_data['password'] = password # TODO: don't save in object?
 
         login_header = self._default_header
 

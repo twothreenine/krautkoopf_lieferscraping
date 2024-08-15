@@ -281,7 +281,7 @@ def save_settings(foodcoop, settings):
 
 def set_setting(foodcoop, setting, value):
     settings = read_settings(foodcoop)
-    settings[detail] = value
+    settings[setting] = value
     save_settings(foodcoop, settings)
 
 def read_locales(foodcoop, locale=None):

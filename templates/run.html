@@ -1,21 +1,13 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>{{foodcoop}} Lieferscraping - {{configuration}} - {{run.name}}</title>
-        {% include "header.html" %}
-    </head>
+{% set title = configuration + " - Ausführung " + run.name %}
+{% set back_to_main = True %}
+{% extends "layout.html" %}
 
-    <body>
-        <div>
-            <form action="/{{fc}}"><input type='submit' value='Zurück zum Hauptmenü'></form>
-            <p>{{messages}}</p>
-            <form action="/{{fc}}/{{configuration}}"><input type='submit' value='Zurück zu {{configuration}}'></form>
-            <h1>{{configuration}} - Ausführung {{run.name}}</h1>
-            <p>{{log_text}}</p>
-            <p><label for="run">Fortschritt: </label><progress id="run" value="{{completion_percentage}}" max="100"/></p>
-            {{ downloads|safe() }}
-            {{ continue_content|safe() }}
-            {{ display_content|safe() }}
-        </div>
-    </body>
-</html>
+{% block body %}
+    {% include "back_to_configuration_button.html" %}
+    <h1>{{configuration}} - Ausführung {{run.name}}</h1>
+    <p>{{log_text}}</p>
+    <p><label for="run">Fortschritt: </label><progress id="run" value="{{completion_percentage}}" max="100"/></p>
+    {{ downloads|safe() }}
+    {{ continue_content|safe() }}
+    {{ display_content|safe() }}
+{% endblock %}

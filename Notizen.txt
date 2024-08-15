@@ -1,15 +1,16 @@
 aktuell:
 - Verbesserungen:
-	- Webinterface in Flask umschreiben & Authentifizierung mit Martins Lösung
+	- Authentifizierung mit Martins Lösung als Option ergänzen (Routing ändern auf /<fc>/cs, Root-Seite reservieren auf app.foodcoops.at/coopscripts ?)
 		- Foodsoft-URL als solche benennen & speichern als Vorbereitung auf mögliche andere Anbindungen wie FCS: Connector type "foodsoft" o.ä. + Version? z.B. fcat deployment
 	- "Ausführung läuft" - verhindern, dass laufende Methode noch mal aufgerufen wird und dann nicht mehr in next_possible_methods ist (sperren + prüfen ob noch verfügbar für den Fall, dass ein alter Tab verwendet wird)
-	- Mehrere Sessions -> mehrere Skriptausführungen gleichzeitig testen
 	- Instanz-Einstellungen-bearbeiten-Seite, Instanz-löschen-Option
 	- Config-Kategorien (ausklappbar? auf Startseite der Instanz)
 	- Besser mit hochgeladenen Dateien umgehen
 	- Fileupload in Konfiguration ermöglichen, manual changes als extra yaml oder csv
 	- Konfiguration-Settings wie "letzte x Ausführungen auflisten" von Config trennen?
+	- Daten exportieren & importieren?
 	- Aufbau anpassen (Labels und Inputs geordneter)
+	- Message Flashing: Farbig hinterlegen (in Box) je nach Kategorie https://flask.palletsprojects.com/en/3.0.x/patterns/flashing/
 	- Locales erweitern
 	- "Foodcoop" in "Instance" oder "Usergroup" umbenennen?
 	- Bug mit Permission Error bei Umbenennen einer Konfiguration (Ordner) fixen? --> vorerst disabled

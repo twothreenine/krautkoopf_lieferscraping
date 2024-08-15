@@ -1,0 +1,20 @@
+<!doctype html>
+{% if title %}
+    <title>{{title}} - Coopscripts {{foodcoop}}</title>
+{% else %}
+    <title>Coopscripts {{foodcoop}}</title>
+{% endif %}
+
+{% include "header.html" %}
+
+{% if back_to_main %}
+    <form action="/{{fc}}"><input type='submit' value='Zurück zum Hauptmenü'></form>
+{% endif %}
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        {% for message in messages %}
+            <p>{{ message|safe() }}</p>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+{% block body %}{% endblock %}

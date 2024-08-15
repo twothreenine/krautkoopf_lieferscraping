@@ -1,8 +1,8 @@
 import flask
-import flask_login
 import re
 import os
 import copy
+import secrets
 import numbers
 import yaml
 import importlib
@@ -14,61 +14,83 @@ import foodsoft
 
 HTTP_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'CONNECT', 'OPTIONS', 'TRACE', 'PATCH']
 
-class App(flask.Flask):
-    def __init__(self, import_name=__name__):
-        super().__init__(import_name)
-        self.instance = None
-        self.foodsoft_connector = None
-        self.settings = None
-        self.locales = None
-        self.locale = None
-        self.messages = []
-
-    def switch_to_instance(self, instance):
-        self.instance = instance
-        self.foodsoft_connector = None
-        self.settings = base.read_settings(instance)
-        self.locales = base.read_locales(instance)
-        self.locale = self.settings.get("default_locale")
-
-app = App()
+app = flask.Flask(__name__)
 app.secret_key = b'_5#y2L"F4Q8z\n\xec]/' # TODO: generate random key
-login_manager = flask_login.LoginManager()
-login_manager.init_app(app)
+app.data = {}
 
-class User(flask_login.UserMixin):
-    pass
+def print_data(): # only for debugging
+    global app
+    print(app.data)
 
-@login_manager.user_loader
-def load_user(user_id):
-    return User.get(user_id)
+def add_data(value):
+    key = secrets.token_hex()
+    global app
+    app.data[key] = value
+    return key
+
+def get_data(key):
+    global app
+    return app.data.get(key)
+
+def delete_data(key):
+    global app
+    if app.data.get(key):
+        app.data.pop(key)
+
+def get_instance():
+    return flask.session["instance"]
+
+def get_settings():
+    return base.read_settings(get_instance())
+
+def get_locales(): # TODO: consider user preference?
+    return base.read_locales(get_instance())
+
+def get_locale():
+    return flask.session["locale"]
+
+def get_foodsoft_connector():
+    return get_data(flask.session.get("foodsoft_connector_key"))
+
+def reset_foodsoft_connector():
+    if key := flask.session.get("foodsoft_connector_key"):
+        delete_data(key)
+    flask.session["foodsoft_connector_key"] = None
+
+class Session:
+    def __init__(self):
+        self.instance = get_instance()
+        self.foodsoft_connector = get_foodsoft_connector()
+        self.settings = get_settings()
+        self.locales = get_locales()
+        self.locale = get_locale()
 
 def get_locale_string(term, script_name, substring="", enforce_return=False):
-    if term in app.locales[script_name] and substring in app.locales[script_name][term]:
+    locales = get_locales()
+    if term in locales[script_name] and substring in locales[script_name][term]:
         if substring:
-            string = app.locales[script_name][term][substring]
+            string = locales[script_name][term][substring]
         else:
-            string = app.locales[script_name][term]
-    elif term in app.locales["base"] and substring in app.locales["base"][term]:
+            string = locales[script_name][term]
+    elif term in locales["base"] and substring in locales["base"][term]:
         if substring:
-            string = app.locales["base"][term][substring]
+            string = locales["base"][term][substring]
         else:
-            string = app.locales["base"][term]
-    elif substring == "name" and term in app.locales[script_name]:
-        string = app.locales[script_name][term]
-    elif substring == "name" and term in app.locales["base"]:
-        string = app.locales["base"][term]
+            string = locales["base"][term]
+    elif substring == "name" and term in locales[script_name]:
+        string = locales[script_name][term]
+    elif substring == "name" and term in locales["base"]:
+        string = locales["base"][term]
     elif enforce_return:
         string = term
     else:
         string = ""
     return string
 
-def read_messages():
-    global app
-    content = "<br/>".join(app.messages)
-    app.messages = []
-    return content
+def switch_to_instance(instance):
+    reset_foodsoft_connector()
+    flask.session["instance"] = instance
+    flask.session["locale"] = get_settings().get("default_locale")
 
 def check_login(submitted_form, cookies, instance):
     user_data = cookies.get("user")
@@ -76,23 +98,23 @@ def check_login(submitted_form, cookies, instance):
         user_data = user_data.split("/")
         cookie_instance = user_data[0]
         cookie_email = user_data[1]
-        if app.foodsoft_connector:
-            if app.instance == instance and instance == cookie_instance:
+        if get_foodsoft_connector():
+            if flask.session.get("instance") == instance and instance == cookie_instance:
                 return True
     if 'password' in submitted_form:
-        app.switch_to_instance(instance)
+        switch_to_instance(instance)
         success = None
         feedback = ""
         email = submitted_form.get('email')
         password = submitted_form.get('password')
-        foodsoft_address = app.settings.get('foodsoft_url')
-        app.foodsoft_connector = foodsoft.FSConnector(url=foodsoft_address, user=email, password=password)
-        app.foodsoft_connector.add_user_data(workgroups=True)
-        if app.foodsoft_connector._session:
-            message = f"Hallo {app.foodsoft_connector.first_name}!"
-            allowed_workgroups = app.settings.get('allowed_workgroups')
+        foodsoft_address = get_settings().get('foodsoft_url')
+        foodsoft_connector = foodsoft.FSConnector(url=foodsoft_address, user=email, password=password)
+        foodsoft_connector.add_user_data(workgroups=True)
+        if foodsoft_connector._session:
+            message = f"Hallo {foodsoft_connector.first_name}!"
+            allowed_workgroups = get_settings().get('allowed_workgroups')
             if allowed_workgroups:
-                matching_workgroups = [wg for wg in app.foodsoft_connector.workgroups if wg in allowed_workgroups]
+                matching_workgroups = [wg for wg in foodsoft_connector.workgroups if wg in allowed_workgroups]
                 print(matching_workgroups)
                 if matching_workgroups:
                     success = True
@@ -102,13 +124,15 @@ def check_login(submitted_form, cookies, instance):
             else:
                 success = True
         if success:
-            app.instance = instance
+            flask.session["foodsoft_connector_key"] = add_data(foodsoft_connector)
+            print_data() # TODO: delete this - only for debugging
+            flask.session["instance"] = instance
             message += " Deine Anmeldung war erfolgreich."
-            app.messages.append(message)
+            flask.flash(message)
             return True
         else:
-            app.foodsoft_connector = None
-            app.messages.append("Login fehlgeschlagen: E-Mail-Adresse und/oder Passwort falsch.")
+            reset_foodsoft_connector()
+            flask.flash("Login fehlgeschlagen: E-Mail-Adresse und/oder Passwort falsch.")
             return False
     else:
         return None
@@ -135,10 +159,10 @@ def login_link(instance):
     return flask.render_template('login_link.html', instance=instance)
 
 def configuration_link(configuration):
-    return flask.render_template('configuration_link.html', foodcoop=app.instance, configuration=configuration)
+    return flask.render_template('configuration_link.html', foodcoop=get_instance(), configuration=configuration)
 
 def display_output_link(configuration, run_name):
-    return flask.render_template('display_output_link.html', foodcoop=app.instance, configuration=configuration, run_name=run_name)
+    return flask.render_template('display_output_link.html', foodcoop=get_instance(), configuration=configuration, run_name=run_name)
 
 def available_scripts():
     script_files = [f for f in os.listdir() if f.startswith("script_") and f.endswith(".py")]
@@ -172,13 +196,13 @@ def script_options(selected_script=None):
 
 def import_script(configuration):
     importlib.invalidate_caches()
-    config = base.read_config(foodcoop=app.instance, configuration=configuration)
+    config = base.read_config(foodcoop=get_instance(), configuration=configuration)
     script_name = "script_" + base.read_in_config(config=config, detail="Script name")
     script = importlib.import_module(script_name)
     return script
 
 def run_path(configuration, run_name):
-    return os.path.join("data", app.instance, configuration, run_name)
+    return os.path.join("data", get_instance(), configuration, run_name)
 
 def list_files(path, folder="download"):
     files = []
@@ -210,7 +234,7 @@ def output_link_with_download_button(configuration, script, run_name):
             source = "/download/" + run_path(configuration, run_name) + "/download/" + files[0]
         else:
             source = zip_download(configuration, run_name)
-        form_content = f"<input name='origin' value='/{app.instance}/{configuration}/display/{run_name}' hidden><input type='submit' value='⤓'>"
+        form_content = f"<input name='origin' value='/{get_instance()}/{configuration}/display/{run_name}' hidden><input type='submit' value='⤓'>"
     progress_bar = '<progress id="run" value="{}" max="100"></progress>'.format(run.completion_percentage)
     return flask.render_template('output_link_with_download_button.html', source=source, form_content=form_content, affix=output_link, progress_bar=progress_bar)
 
@@ -219,10 +243,10 @@ def all_download_buttons(configuration, run_name):
     path = run_path(configuration, run_name)
     files = list_files(path)
     if len(files) > 1:
-        content += flask.render_template('download_button.html', source=zip_download(configuration, run_name), value="⤓ ZIP", affix="", foodcoop=app.instance, configuration=configuration, run_name=run_name)
+        content += flask.render_template('download_button.html', source=zip_download(configuration, run_name), value="⤓ ZIP", affix="", foodcoop=get_instance(), configuration=configuration, run_name=run_name)
     for file in files:
-        source = "/download/data/" + app.instance + "/" + configuration + "/" + run_name + "/download/" + file
-        content += flask.render_template('download_button.html', source=source, value="⤓ " + file, affix="", foodcoop=app.instance, configuration=configuration, run_name=run_name)
+        source = "/download/data/" + get_instance() + "/" + configuration + "/" + run_name + "/download/" + file
+        content += flask.render_template('download_button.html', source=source, value="⤓ " + file, affix="", foodcoop=get_instance(), configuration=configuration, run_name=run_name)
     return content
 
 def display(path, display_type="display"):
@@ -290,7 +314,7 @@ def add_config_variable_field(detail, config, config_variables, special_variable
     if config_content:
         config_content += "<br/>"
     if str(detail) == "manual changes":
-        config_content += app.locales["base"]["manual changes"].format(str(len(config[detail])))
+        config_content += get_locales()["base"]["manual changes"].format(str(len(config[detail])))
     else:
         config_content += f"<label>{get_locale_string(term=str(detail), substring='name', script_name=script_name, enforce_return=True)}: "
         input_type = "input type='text'"
@@ -337,10 +361,9 @@ def add_config_variable_field(detail, config, config_variables, special_variable
     return config_content
 
 def add_instance(submitted_form):
-    global app
     new_instance_name = submitted_form.get('new instance name').strip()
     if base.equal_strings_check([new_instance_name], base.find_instances()):
-        app.messages.append(f"Es existiert bereits eine Instanz namens {new_instance_name}! Bitte wähle einen anderen Namen.")
+        flask.flash(f"Es existiert bereits eine Instanz namens {new_instance_name}! Bitte wähle einen anderen Namen.")
         return flask.make_response(new_instance_page(submitted_form))
     else:
         settings = {
@@ -350,18 +373,17 @@ def add_instance(submitted_form):
             "configuration_groups": {}
             }
         base.save_settings(new_instance_name, settings)
-        app.messages.append("Instanz angelegt.")
+        flask.flash("Instanz angelegt.")
         return flask.make_response(login_page(new_instance_name))
 
 def add_configuration(submitted_form):
-    global app
     new_configuration_name = submitted_form.get('new configuration name').strip()
-    if base.equal_strings_check([new_configuration_name], base.find_configurations(foodcoop=app.instance)):
-        app.messages.append("Es existiert bereits eine Konfiguration namens " + new_configuration_name + " für " + app.instance.capitalize() + ". Bitte wähle einen anderen Namen.")
+    if base.equal_strings_check([new_configuration_name], base.find_configurations(foodcoop=get_instance())):
+        flask.flash("Es existiert bereits eine Konfiguration namens " + new_configuration_name + " für " + get_instance().capitalize() + ". Bitte wähle einen anderen Namen.")
         return flask.make_response(new_configuration_page())
     else:
-        base.save_config(foodcoop=app.instance, configuration=new_configuration_name, config={"Script name": submitted_form.get('script name')})
-        app.messages.append("Konfiguration angelegt.")
+        base.save_config(foodcoop=get_instance(), configuration=new_configuration_name, config={"Script name": submitted_form.get('script name')})
+        flask.flash("Konfiguration angelegt.")
         script = import_script(configuration=new_configuration_name)
         config_variables = script.config_variables()
         if config_variables:
@@ -370,7 +392,7 @@ def add_configuration(submitted_form):
             return flask.make_response(main_page())
 
 def save_configuration_edit(configuration, submitted_form):
-    config = base.read_config(foodcoop=app.instance, configuration=configuration)
+    config = base.read_config(foodcoop=get_instance(), configuration=configuration)
     for name in submitted_form:
         if name == "configuration name" or name == "password":
             continue
@@ -395,35 +417,34 @@ def save_configuration_edit(configuration, submitted_form):
             config[name] = value
         elif name in config:
             config.pop(name)
-    base.save_config(foodcoop=app.instance, configuration=configuration, config=config)
+    base.save_config(foodcoop=get_instance(), configuration=configuration, config=config)
     # TODO: Renaming a configuration sometimes leads to PermissionError: [WinError 5], therefore the input field is disabled for now
     # configuration_name = submitted_form.get('configuration name')
     # if configuration_name != configuration:
-    #     renamed_configuration = base.rename_configuration(foodcoop=app.instance, old_configuration_name=configuration, new_configuration_name=configuration_name)
+    #     renamed_configuration = base.rename_configuration(foodcoop=get_instance(), old_configuration_name=configuration, new_configuration_name=configuration_name)
     #     if renamed_configuration:
     #         global app
-    #         app.messages.append('Konfiguration "{}" erfolgreich in "{}" umbenannt.'.format(configuration, renamed_configuration))
+    #         flask.flash('Konfiguration "{}" erfolgreich in "{}" umbenannt.'.format(configuration, renamed_configuration))
     #     return configuration_name
     # else:
     return configuration
 
 def del_configuration(submitted_form):
-    global app
     configuration_to_delete = submitted_form.get('delete configuration')
-    success, feedback = base.delete_configuration(app.instance, configuration_to_delete)
+    success, feedback = base.delete_configuration(get_instance(), configuration_to_delete)
     if success:
-        app.messages.append(configuration_to_delete + " erfolgreich gelöscht.")
+        flask.flash(configuration_to_delete + " erfolgreich gelöscht.")
     elif feedback:
-        app.messages.append(feedback)
+        flask.flash(feedback)
     else:
-        app.messages.append("Löschen von " + configuration_to_delete + " fehlgeschlagen: Konfiguration scheint nicht zu existieren.")
+        flask.flash("Löschen von " + configuration_to_delete + " fehlgeschlagen: Konfiguration scheint nicht zu existieren.")
     return flask.make_response(main_page())
 
 def root_page():
     instances_content = ""
     for instance in base.find_instances():
         instances_content += login_link(instance)
-    return flask.render_template('root.html', messages=read_messages(), instances_content=instances_content)
+    return flask.render_template('root.html', instances_content=instances_content)
 
 def new_instance_page(submitted_form=None):
     name_value = ""
@@ -444,42 +465,41 @@ def new_instance_page(submitted_form=None):
             selected = " selected"
         locale_options += f"<option{selected}>{loc}</option>"
 
-    return flask.render_template('new_instance.html', messages=read_messages(), name_value=name_value, description_value=description_value, url_value=url_value, locale_options=locale_options)
+    return flask.render_template('new_instance.html', name_value=name_value, description_value=description_value, url_value=url_value, locale_options=locale_options)
 
 def main_page():
     content = ""
-    for configuration in base.find_configurations(foodcoop=app.instance):
+    for configuration in base.find_configurations(foodcoop=get_instance()):
         if content:
             content += "<br/>"
         content += configuration_link(configuration)
 
-    return flask.render_template('main.html', messages=read_messages(), base_locales=app.locales["base"], fc=app.instance, foodcoop=app.instance.capitalize(), configurations=content)
+    return flask.render_template('main.html', base_locales=get_locales()["base"], fc=get_instance(), foodcoop=get_instance().capitalize(), configurations=content)
 
 def login_page(fc, request_path=None, submitted_form=None):
     if not request_path:
         request_path = "/" + fc
-    global app
-    if app.foodsoft_connector and app.instance != fc:
+    if get_foodsoft_connector() and flask.session.get("instance") != fc:
         return flask.make_response(switch_instance_page(fc, request_path, submitted_form))
     else:
-        app.switch_to_instance(fc)
-        foodsoft_address = app.settings.get("foodsoft_url", "")
+        switch_to_instance(fc)
+        foodsoft_address = get_settings().get("foodsoft_url", "")
         foodsoft_login_address = foodsoft_address
         if not foodsoft_login_address.endswith("/"):
             foodsoft_login_address += "/"
         foodsoft_login_address += "login"
-        description = app.settings.get("description", "")
-        return flask.render_template('login.html', messages=read_messages(), request_path=request_path, submitted_form_content=submitted_form_content(submitted_form), foodcoop=app.instance.capitalize(), foodsoft_address=foodsoft_address, foodsoft_login_address=foodsoft_login_address, description=description)
+        description = get_settings().get("description", "")
+        return flask.render_template('login.html', request_path=request_path, submitted_form_content=submitted_form_content(submitted_form), foodcoop=get_instance().capitalize(), foodsoft_address=foodsoft_address, foodsoft_login_address=foodsoft_login_address, description=description)
 
 def switch_instance_page(requested_instance, request_path=None, submitted_form=None):
-    return flask.render_template('switch_instance.html', requested_instance=requested_instance, current_instance=app.instance, submitted_form_content=submitted_form_content(submitted_form, request_path))
+    return flask.render_template('switch_instance.html', requested_instance=requested_instance, current_instance=get_instance(), submitted_form_content=submitted_form_content(submitted_form, request_path))
 
 def configuration_page(configuration):
-    config = base.read_config(foodcoop=app.instance, configuration=configuration)
+    config = base.read_config(foodcoop=get_instance(), configuration=configuration)
     script_name = base.read_in_config(config, "Script name")
     script = import_script(configuration=configuration)
     output_content = ""
-    outputs = base.get_outputs(foodcoop=app.instance, configuration=configuration)
+    outputs = base.get_outputs(foodcoop=get_instance(), configuration=configuration)
     if not outputs:
         output_content += "Keine Ausführungen gefunden."
     outputs.reverse()
@@ -495,22 +515,22 @@ def configuration_page(configuration):
         if config_content:
             config_content += "<br/>"
         if str(detail) == "manual changes":
-            config_content += app.locales["base"]["manual changes"].format(str(len(config[detail])))
+            config_content += get_locales()["base"]["manual changes"].format(str(len(config[detail])))
         else:
             config_content += get_locale_string(term=str(detail), substring='name', script_name=script_name, enforce_return=True) + ": " + str(config[detail])
 
-    return flask.render_template('configuration.html', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), configuration=configuration, output_content=output_content, config_content=config_content)
+    return flask.render_template('configuration.html', fc=get_instance(), foodcoop=get_instance().capitalize(), configuration=configuration, output_content=output_content, config_content=config_content)
 
 def run_page(configuration, script, run):
     downloads = all_download_buttons(configuration, run.name)
-    script_name = base.read_in_config(base.read_config(app.instance, configuration), "Script name")
+    script_name = base.read_in_config(base.read_config(get_instance(), configuration), "Script name")
 
     log_entries = []
     for entry in run.log:
         entry_string = get_locale_string(term=entry.action, script_name=script_name, enforce_return=True)
         if entry.done_by:
             entry_string += f" von {entry.done_by}"
-        entry_string += f" am {babel.dates.format_datetime(datetime=entry.datetime, format='short', locale=app.locale)}"
+        entry_string += f" am {babel.dates.format_datetime(datetime=entry.datetime, format='short', locale=get_locale())}"
         log_entries.append(entry_string)
     log_text = ", ".join(log_entries)
     if log_text:
@@ -519,31 +539,31 @@ def run_page(configuration, script, run):
 
     continue_content = ""
     for option in run.next_possible_methods:
-        option_locales = app.locales[script_name][option.name]
+        option_locales = get_locales()[script_name][option.name]
         inputs = ""
         for ipt in option.inputs:
             inputs = add_input_field(ipt=ipt, script_name=script_name, input_content=inputs)
-        continue_content += flask.render_template('continue_option.html', fc=app.instance, configuration=configuration, run_name=run.name, option_name=option.name, option_locales=option_locales, inputs=inputs)
+        continue_content += flask.render_template('continue_option.html', fc=get_instance(), configuration=configuration, run_name=run.name, option_name=option.name, option_locales=option_locales, inputs=inputs)
     display_content = ""
     display_content += display(path=run.path, display_type="display")
     display_content += display(path=run.path, display_type="details")
-    return flask.render_template('run.html', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), configuration=configuration, run=run, log_text=log_text, completion_percentage=run.completion_percentage, downloads=downloads, continue_content=continue_content, display_content=display_content)
+    return flask.render_template('run.html', fc=get_instance(), foodcoop=get_instance().capitalize(), configuration=configuration, run=run, log_text=log_text, completion_percentage=run.completion_percentage, downloads=downloads, continue_content=continue_content, display_content=display_content)
 
 def edit_configuration_page(configuration):
     config_content = ""
-    config = base.read_config(foodcoop=app.instance, configuration=configuration)
+    config = base.read_config(foodcoop=get_instance(), configuration=configuration)
     script_name = base.read_in_config(config, "Script name")
     script = import_script(configuration=configuration)
     config_variables = script.config_variables()
     special_variables = ["Script name", "number of runs to list", "last imported run"]
 
     if "last imported run" in [c_v.name for c_v in config_variables]:
-        runs = base.get_outputs(foodcoop=app.instance, configuration=configuration)
+        runs = base.get_outputs(foodcoop=get_instance(), configuration=configuration)
         if runs:
             runs.reverse()
-            config_content += f"<label>{app.locales['base']['last imported run']}: "
+            config_content += f"<label>{get_locales()['base']['last imported run']}: "
             config_content += "<select name='last imported run'>"
-            config_content += f"<option>{app.locales['base']['none (feminine)']}</option>"
+            config_content += f"<option>{get_locales()['base']['none (feminine)']}</option>"
             last_imported_run = base.read_in_config(config, "last imported run", "")
             for run in runs:
                 selected = ""
@@ -566,13 +586,13 @@ def edit_configuration_page(configuration):
 
     number_of_runs_to_list = base.read_in_config(config, "number of runs to list", 5)
 
-    return flask.render_template('edit_configuration.html', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), base_locales=app.locales["base"], configuration=configuration, number_of_runs_to_list=number_of_runs_to_list, config_content=config_content, script_options=script_options(selected_script=config["Script name"]))
+    return flask.render_template('edit_configuration.html', fc=get_instance(), foodcoop=get_instance().capitalize(), base_locales=get_locales()["base"], configuration=configuration, number_of_runs_to_list=number_of_runs_to_list, config_content=config_content, script_options=script_options(selected_script=config["Script name"]))
 
 def delete_configuration_page(configuration):
-    return flask.render_template('delete_configuration.html', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), configuration=configuration)
+    return flask.render_template('delete_configuration.html', fc=get_instance(), foodcoop=get_instance().capitalize(), configuration=configuration)
 
 def new_configuration_page():
-    return flask.render_template('new_configuration.html', messages=read_messages(), fc=app.instance, foodcoop=app.instance.capitalize(), script_options=script_options())
+    return flask.render_template('new_configuration.html', fc=get_instance(), foodcoop=get_instance().capitalize(), script_options=script_options())
 
 @app.route('/', methods=HTTP_METHODS)
 def root():
@@ -595,10 +615,9 @@ def login(fc):
 def do_main(fc):
     submitted_form = flask.request.form
     if 'logout' in submitted_form:
-        global app
-        app = App()
-        app.instance = None
-        app.messages.append("Logout erfolgreich.")
+        reset_foodsoft_connector()
+        flask.session["instance"] = None
+        flask.flash("Logout erfolgreich.")
         request_path = submitted_form.get("request_path")
         if request_path:
             return flask.make_response(login_page(fc, request_path))
@@ -613,26 +632,24 @@ def do_main(fc):
             resp = flask.make_response(del_configuration(submitted_form))
         else:
             resp = flask.make_response(main_page())
-        resp.set_cookie("user", f"{fc}/{app.foodsoft_connector.user}")
+        resp.set_cookie("user", f"{fc}/{get_foodsoft_connector().user}")
         return resp
     else:
         return flask.make_response(login_page(fc))
 
 @app.route('/<fc>/<configuration>', methods=HTTP_METHODS)
 def configuration(fc, configuration):
-    global app
     submitted_form = flask.request.form
     if check_login(submitted_form, flask.request.cookies, fc):
         if "Script name" in submitted_form:
             configuration = save_configuration_edit(configuration=configuration, submitted_form=submitted_form)
-            app.messages.append("Änderungen in Konfiguration gespeichert.")
+            flask.flash("Änderungen in Konfiguration gespeichert.")
         return flask.make_response(configuration_page(configuration))
     else:
         return flask.make_response(login_page(fc, flask.request.full_path, submitted_form))
 
 @app.route('/<fc>/<configuration>/display/<run_name>', methods=HTTP_METHODS)
 def display_run(fc, configuration, run_name):
-    global app
     submitted_form = flask.request.form
     if check_login(submitted_form, flask.request.cookies, fc):
         importlib.invalidate_caches()
@@ -662,10 +679,10 @@ def display_run(fc, configuration, run_name):
                     if value:
                         parameters[ipt.name] = value
             func = getattr(run, method)
-            func(app, **parameters)
+            func(Session(), **parameters)
             run.save()
             script_name = base.read_in_config(base.read_config(fc, configuration), "Script name")
-            app.messages.append(app.locales[script_name][method]["name"] + " wurde ausgeführt.")
+            flask.flash(get_locales()[script_name][method]["name"] + " wurde ausgeführt.")
         return flask.make_response(run_page(configuration, script, run))
     else:
         return flask.make_response(login_page(fc, flask.request.full_path, submitted_form))
@@ -676,7 +693,7 @@ def start_script_run(fc, configuration):
     if check_login(submitted_form, flask.request.cookies, fc):
         importlib.invalidate_caches()
         script = import_script(configuration=configuration)
-        run = script.ScriptRun(foodcoop=app.instance, configuration=configuration)
+        run = script.ScriptRun(foodcoop=get_instance(), configuration=configuration)
         run.save()
         return flask.make_response(run_page(configuration, script, run))
     else:
