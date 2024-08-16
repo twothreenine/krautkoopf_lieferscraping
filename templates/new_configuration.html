@@ -4,7 +4,7 @@
 
 {% block body %}
     <h1>Neue Konfiguration</h1>
-    <form action="/{{fc}}" method="post">
+    <form action="/{{fc}}/cs" method="post">
         <p><input name="new configuration name" type="text" placeholder="Name" required></p>
         <p><select name="script name" required>
             {{ script_options|safe() }}

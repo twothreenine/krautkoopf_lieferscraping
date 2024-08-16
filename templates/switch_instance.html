@@ -4,7 +4,7 @@
 {% block body %}
     <h1>Instanz wechseln?</h1>
     <p>Du versuchst die Instanz {{requested_instance}} aufzurufen, obwohl du gerade in der Instanz {{current_instance}} angemeldet bist.</p>
-    <form action="/{{requested_instance}}" method="post">
+    <form action="/{{requested_instance}}/cs" method="post">
         {{ submitted_form_content|safe() }}
         <input name="logout" value="Von {{current_instance}} abmelden" type="submit" />
     </form>

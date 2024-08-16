@@ -8,7 +8,7 @@
 {% include "header.html" %}
 
 {% if back_to_main %}
-    <form action="/{{fc}}"><input type='submit' value='Zurück zum Hauptmenü'></form>
+    <form action="/{{fc}}/cs"><input type='submit' value='Zurück zum Hauptmenü'></form>
 {% endif %}
 {% with messages = get_flashed_messages() %}
     {% if messages %}

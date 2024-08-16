@@ -4,7 +4,7 @@
 
 {% block body %}
     <h1>{{configuration}} Konfiguration</h1>
-    <form action="/{{fc}}/{{configuration}}" method="post">
+    <form action="/{{fc}}/cs/{{configuration}}" method="post">
         <label>{{base_locales["configuration name"]}}: <input name="configuration name" type="text" value="{{configuration}}" disabled></label><br/>
         <label>{{base_locales["Script name"]}}: 
             <select name="Script name" required>
@@ -16,5 +16,5 @@
         <br><br>
         <input type="submit" value="Speichern">
     </form>
-    <form action="/{{fc}}/{{configuration}}"><input type='submit' value='Bearbeiten abbrechen'></form>
+    <form action="/{{fc}}/cs/{{configuration}}"><input type='submit' value='Bearbeiten abbrechen'></form>
 {% endblock %}

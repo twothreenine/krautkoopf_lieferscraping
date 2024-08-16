@@ -4,11 +4,11 @@
 
 {% block body %}
     <h1>{{configuration}}</h1>
-    <form action="/{{fc}}/{{configuration}}/new_run"><input type='submit' value='Skript ausführen...'></form>
+    <form action="/{{fc}}/cs/{{configuration}}/new_run"><input type='submit' value='Skript ausführen...'></form>
     <h2>Letzte Ausführungen</h2>
     <p>{{ output_content|safe() }}</p>
     <h2>Konfiguration</h2>
-    <p><form action="/{{fc}}/{{configuration}}/edit"><input type='submit' value='Bearbeiten...'></form>
+    <p><form action="/{{fc}}/cs/{{configuration}}/edit"><input type='submit' value='Bearbeiten...'></form>
     {{ config_content|safe() }}</p>
-    <form action="/{{fc}}/{{configuration}}/delete"><input type='submit' value='Konfiguration löschen...'></form>
+    <form action="/{{fc}}/cs/{{configuration}}/delete"><input type='submit' value='Konfiguration löschen...'></form>
 {% endblock %}

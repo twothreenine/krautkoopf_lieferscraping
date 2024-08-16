@@ -5,9 +5,9 @@
 {% block body %}
     <h1>Konfiguration {{configuration}} löschen?</h1>
     <p>Achtung, dadurch werden alle Daten dieser Konfiguration unwiderruflich gelöscht!</p>
-    <form action="/{{fc}}" method="post">
+    <form action="/{{fc}}/cs" method="post">
         <input name="delete configuration" value="{{configuration}}" hidden>
         <input type="submit" value="Löschen bestätigen">
     </form>
-    <form action="/{{fc}}/{{configuration}}"><input type='submit' value='Abbrechen'></form>
+    <form action="/{{fc}}/cs/{{configuration}}"><input type='submit' value='Abbrechen'></form>
 {% endblock %}

@@ -57,6 +57,9 @@ def reset_foodsoft_connector():
         delete_data(key)
     flask.session["foodsoft_connector_key"] = None
 
+def base_download_route():
+    return f"/{get_instance()}/cs/download/"
+
 class Session:
     def __init__(self):
         self.instance = get_instance()
@@ -219,7 +222,7 @@ def zip_download(configuration, run_name):
         for file in files:
             download_filepath = os.path.join(path, "download", file)
             zipObj.write(download_filepath, os.path.basename(download_filepath))
-    source = "/download/" + zip_filepath
+    source = base_download_route() + zip_filepath
     return source
 
 def output_link_with_download_button(configuration, script, run_name):
@@ -231,10 +234,10 @@ def output_link_with_download_button(configuration, script, run_name):
     source = ""
     if files:
         if len(files) == 1:
-            source = "/download/" + run_path(configuration, run_name) + "/download/" + files[0]
+            source = base_download_route() + run_path(configuration, run_name) + "/download/" + files[0]
         else:
             source = zip_download(configuration, run_name)
-        form_content = f"<input name='origin' value='/{get_instance()}/{configuration}/display/{run_name}' hidden><input type='submit' value='⤓'>"
+        form_content = f"<input name='origin' value='/{get_instance()}/cs/{configuration}/display/{run_name}' hidden><input type='submit' value='⤓'>"
     progress_bar = '<progress id="run" value="{}" max="100"></progress>'.format(run.completion_percentage)
     return flask.render_template('output_link_with_download_button.html', source=source, form_content=form_content, affix=output_link, progress_bar=progress_bar)
 
@@ -245,7 +248,7 @@ def all_download_buttons(configuration, run_name):
     if len(files) > 1:
         content += flask.render_template('download_button.html', source=zip_download(configuration, run_name), value="⤓ ZIP", affix="", foodcoop=get_instance(), configuration=configuration, run_name=run_name)
     for file in files:
-        source = "/download/data/" + get_instance() + "/" + configuration + "/" + run_name + "/download/" + file
+        source = base_download_route() + "data/" + get_instance() + "/" + configuration + "/" + run_name + "/download/" + file
         content += flask.render_template('download_button.html', source=source, value="⤓ " + file, affix="", foodcoop=get_instance(), configuration=configuration, run_name=run_name)
     return content
 
@@ -478,7 +481,7 @@ def main_page():
 
 def login_page(fc, request_path=None, submitted_form=None):
     if not request_path:
-        request_path = "/" + fc
+        request_path = f"/{fc}/cs"
     if get_foodsoft_connector() and flask.session.get("instance") != fc:
         return flask.make_response(switch_instance_page(fc, request_path, submitted_form))
     else:
@@ -594,7 +597,7 @@ def delete_configuration_page(configuration):
 def new_configuration_page():
     return flask.render_template('new_configuration.html', fc=get_instance(), foodcoop=get_instance().capitalize(), script_options=script_options())
 
-@app.route('/', methods=HTTP_METHODS)
+@app.route('/coopscripts', methods=HTTP_METHODS)
 def root():
     submitted_form = flask.request.form
     if 'new instance' in submitted_form:
@@ -604,14 +607,14 @@ def root():
     else:
         return flask.make_response(root_page())
 
-@app.get('/<fc>')
+@app.get('/<fc>/cs')
 def login(fc):
     if check_login(flask.request.form, flask.request.cookies, fc):
         return flask.make_response(main_page())
     else:
         return flask.make_response(login_page(fc))
 
-@app.post('/<fc>')
+@app.post('/<fc>/cs')
 def do_main(fc):
     submitted_form = flask.request.form
     if 'logout' in submitted_form:
@@ -637,7 +640,7 @@ def do_main(fc):
     else:
         return flask.make_response(login_page(fc))
 
-@app.route('/<fc>/<configuration>', methods=HTTP_METHODS)
+@app.route('/<fc>/cs/<configuration>', methods=HTTP_METHODS)
 def configuration(fc, configuration):
     submitted_form = flask.request.form
     if check_login(submitted_form, flask.request.cookies, fc):
@@ -648,7 +651,7 @@ def configuration(fc, configuration):
     else:
         return flask.make_response(login_page(fc, flask.request.full_path, submitted_form))
 
-@app.route('/<fc>/<configuration>/display/<run_name>', methods=HTTP_METHODS)
+@app.route('/<fc>/cs/<configuration>/display/<run_name>', methods=HTTP_METHODS)
 def display_run(fc, configuration, run_name):
     submitted_form = flask.request.form
     if check_login(submitted_form, flask.request.cookies, fc):
@@ -687,7 +690,7 @@ def display_run(fc, configuration, run_name):
     else:
         return flask.make_response(login_page(fc, flask.request.full_path, submitted_form))
 
-@app.route('/<fc>/<configuration>/new_run', methods=HTTP_METHODS)
+@app.route('/<fc>/cs/<configuration>/new_run', methods=HTTP_METHODS)
 def start_script_run(fc, configuration):
     submitted_form = flask.request.form
     if check_login(submitted_form, flask.request.cookies, fc):
@@ -699,7 +702,7 @@ def start_script_run(fc, configuration):
     else:
         return flask.make_response(login_page(fc, flask.request.full_path, submitted_form))
 
-@app.route('/<fc>/<configuration>/edit', methods=HTTP_METHODS)
+@app.route('/<fc>/cs/<configuration>/edit', methods=HTTP_METHODS)
 def edit_configuration(fc, configuration):
     submitted_form = flask.request.form
     if check_login(submitted_form, flask.request.cookies, fc):
@@ -707,7 +710,7 @@ def edit_configuration(fc, configuration):
     else:
         return flask.make_response(login_page(fc, flask.request.full_path))
 
-@app.route('/<fc>/<configuration>/delete', methods=HTTP_METHODS)
+@app.route('/<fc>/cs/<configuration>/delete', methods=HTTP_METHODS)
 def delete_configuration(fc, configuration):
     submitted_form = flask.request.form
     if check_login(submitted_form, flask.request.cookies, fc):
@@ -715,11 +718,9 @@ def delete_configuration(fc, configuration):
     else:
         return flask.make_response(login_page(fc, flask.request.full_path, submitted_form))
 
-@app.route('/download/<path:filepath>', methods=HTTP_METHODS)
-def download(filepath):
+@app.route('/<fc>/cs/download/<path:filepath>', methods=HTTP_METHODS)
+def download(fc, filepath):
     submitted_form = flask.request.form
-    dir_array = os.path.normpath(filepath).split(os.path.sep)
-    fc = dir_array[1]
     if check_login(submitted_form, flask.request.cookies, fc):
         return flask.send_from_directory(directory="", path=filepath)
     else:
