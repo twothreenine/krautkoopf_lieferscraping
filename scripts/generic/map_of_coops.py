@@ -7,7 +7,6 @@ pip install geopy
 pip install folium
 """
 
-import importlib
 import csv
 import folium
 from folium import plugins
@@ -104,12 +103,3 @@ class FoodCoop:
             html += f"<p><label>📧</label> <a href='mailto:{self.email}'>{self.email}</a></p>"
 
         return html
-
-if __name__ == "__main__":
-    importlib.invalidate_caches()
-    script = importlib.import_module("script_generic_map_of_coops") # I don't know why we have to do this, but if the ScriptRun object is just initialized directly (run = ScriptRun(...)), then it doesn't load when we try to load in web ("AttributeError: Can't get attribute 'ScriptRun' on <module '__main__' from 'web.py'>")
-    run = script.ScriptRun(foodcoop="Demo-Test", configuration="FoodCoops-Karte")
-    while run.next_possible_methods:
-        func = getattr(run, run.next_possible_methods[0].name)
-        func()
-    run.save()

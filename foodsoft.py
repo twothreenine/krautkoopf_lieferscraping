@@ -15,7 +15,7 @@ from selenium.webdriver.firefox.service import Service as FirefoxService
 from webdriver_manager.firefox import GeckoDriverManager
 
 import base
-import foodsoft_article
+import script_libs.generic.foodsoft_article as foodsoft_article
 
 logging.basicConfig() # level=logging.DEBUG
 
@@ -285,10 +285,8 @@ class FSConnector:
             price_net = float(columns[5].text.replace(",", ".").replace("€", "").strip())
             vat = float(columns[6].text.replace(",", ".").replace("%", "").strip())
             supplier_id = columns[7].find("a").get("href").split("/")[-1]
-            matching_suppliers = [s for s in suppliers if s.no == supplier_id]
-            if matching_suppliers:
-                supplier = matching_suppliers[0]
-            else:
+            supplier = next((s for s in suppliers if s.no == supplier_id))
+            if not supplier:
                 supplier = self.get_data_of_supplier(supplier_id=supplier_id, name_fields=name_fields, origin_fields=origin_fields, address_fields=address_fields, website_fields=website_fields, category_fields=category_fields, additional_fields=additional_fields)
                 if supplier:
                     suppliers.append(supplier)

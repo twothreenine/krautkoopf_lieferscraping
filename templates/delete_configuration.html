@@ -1,5 +1,6 @@
 {% set title = configuration + ' löschen' %}
 {% set back_to_main = True %}
+<a style="float: right" href="/{{fc}}/cs/{{configuration}}">Löschen abbrechen</a>
 {% extends "layout.html" %}
 
 {% block body %}
@@ -9,5 +10,4 @@
         <input name="delete configuration" value="{{configuration}}" hidden>
         <input type="submit" value="Löschen bestätigen">
     </form>
-    <form action="/{{fc}}/cs/{{configuration}}"><input type='submit' value='Abbrechen'></form>
 {% endblock %}

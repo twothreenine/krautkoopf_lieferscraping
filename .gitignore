@@ -134,3 +134,4 @@ data/
 config/
 Archiv/
 test.py
+script_*.py

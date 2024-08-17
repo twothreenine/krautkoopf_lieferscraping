@@ -18,10 +18,10 @@ import tabula
 from subprocess import CalledProcessError
 
 import base
-import foodsoft_article
-import foodsoft_article_import
-import foodsoft_article_order
-import vat
+import script_libs.generic.foodsoft_article as foodsoft_article
+import script_libs.generic.foodsoft_article_import as foodsoft_article_import
+import script_libs.generic.foodsoft_article_order as foodsoft_article_order
+import script_libs.generic.vat as vat
 
 # Inputs this script's methods take
 email = base.Input(name="email", required=False, input_format="email", example="example@foo.test")

@@ -2,14 +2,11 @@
 Script for reading out the Hofladen PDF price list from Biohof Renner, A-8321 St. Margarethen an der Raab and creating a CSV file for article upload into Foodsoft.
 """
 
-import importlib
-# import tabula
-# import pandas
 import openpyxl
 
 import base
-import foodsoft_article
-import foodsoft_article_import
+import script_libs.generic.foodsoft_article as foodsoft_article
+import script_libs.generic.foodsoft_article_import as foodsoft_article_import
 
 # Inputs this script's methods take
 price_list = base.Input(name="price_list", required=True, accepted_file_types=[".xslx"], input_format="file")
@@ -151,12 +148,3 @@ def transform_origin(origin):
         return "Steiermark"
     else:
         return origin
-
-if __name__ == "__main__":
-    importlib.invalidate_caches()
-    script = importlib.import_module("script_krautkoopf_Renner_import") # I don't know why we have to do this, but if the ScriptRun object is just initialized directly (run = ScriptRun(...)), then it doesn't load when we try to load in web ("AttributeError: Can't get attribute 'ScriptRun' on <module '__main__' from 'web.py'>")
-    run = script.ScriptRun(foodcoop="krautkoopf", configuration="Supplier X")
-    while run.next_possible_methods:
-        func = getattr(run, run.next_possible_methods[0].name)
-        func()
-    run.save()

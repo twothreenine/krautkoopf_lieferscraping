@@ -1,6 +1,6 @@
 aktuell:
 - Verbesserungen:
-	- Authentifizierung mit Martins Lösung als Option ergänzen (Routing ändern auf /<fc>/cs, Root-Seite reservieren auf app.foodcoops.at/coopscripts ?)
+	- Authentifizierung mit Martins Lösung als Option ergänzen (Root-Seite reserviert auf app.foodcoops.at/coopscripts ?)
 		- Foodsoft-URL als solche benennen & speichern als Vorbereitung auf mögliche andere Anbindungen wie FCS: Connector type "foodsoft" o.ä. + Version? z.B. fcat deployment
 	- "Ausführung läuft" - verhindern, dass laufende Methode noch mal aufgerufen wird und dann nicht mehr in next_possible_methods ist (sperren + prüfen ob noch verfügbar für den Fall, dass ein alter Tab verwendet wird)
 	- Instanz-Einstellungen-bearbeiten-Seite, Instanz-löschen-Option
@@ -53,10 +53,3 @@ Deployment:
 in Foodsoft ändern?
 - Artikel können per CSV nicht auf inaktiv gesetzt, sondern nur gelöscht werden
 - bei bestimmten Sachen auf Hackathon-Fork warten?
-
-in allen Skripten ersetzen:
-
-base.read_in_config(config, 
-config.get(
-
-[sm for sm in run.next_possible_methods if sm.name == method][0] -> next(...) (inkl. if ... davor)

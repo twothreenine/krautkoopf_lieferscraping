@@ -31,7 +31,10 @@ class Run:
     @classmethod
     def load(cls, path):
         with open(os.path.join(path, "run.obj"), 'rb') as file:
-            return dill.load(file)
+            try:
+                return dill.load(file)
+            except ModuleNotFoundError:
+                return None
 
 class ScriptMethod:
     """
@@ -198,13 +201,6 @@ def read_config(foodcoop, configuration):
         configuration = {}
     return configuration
 
-def read_in_config(config, detail, alternative=None):
-    # legacy code, use config.get(detail, alternative) instead
-    if detail in config:
-        return config[detail]
-    else:
-        return alternative
-
 def save_config(foodcoop, configuration, config):
     config_path = os.path.join("data", foodcoop, configuration)
     os.makedirs(config_path, exist_ok=True)
@@ -218,6 +214,10 @@ def set_config_detail(foodcoop, configuration, detail, value):
     save_config(foodcoop, configuration, config)
 
 def rename_configuration(foodcoop, old_configuration_name, new_configuration_name):
+    """
+    Disabled for now, see app.py for explanation.
+    TODO: consider run to be None (run.load changed)
+    """
     configurations = find_configurations(foodcoop)
     if old_configuration_name in configurations:
         # rename folder
@@ -296,10 +296,8 @@ def read_locales(foodcoop, locale=None):
         elif os.path.isfile(os.path.join("locales", package, "en")):
             locale_package = "en.yaml"
         else:
-            files = os.listdir(os.path.join("locales", package))
-            if files:
-                locale_package = files[0]
-            else:
+            locale_package = next(iter(os.listdir(os.path.join("locales", package))))
+            if not locale_package:
                 continue
         with open(os.path.join("locales", package, locale_package), encoding="UTF8") as yaml_file:
             locales[package] = yaml.safe_load(yaml_file)

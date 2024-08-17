@@ -8,7 +8,6 @@ pip install geopy
 pip install folium
 """
 
-import importlib
 from geopy import Nominatim
 import folium
 from folium import plugins
@@ -50,17 +49,17 @@ class ScriptRun(base.Run):
 
     def run_script(self, session):
         config = base.read_config(self.foodcoop, self.configuration)
-        additional_supplier_fields = base.read_in_config(config, "additional supplier field(s)", [])
+        additional_supplier_fields = config.get("additional supplier field(s)", [])
         print(additional_supplier_fields)
-        suppliers = session.foodsoft_connector.get_supplier_data(name_fields=base.read_in_config(config, "supplier name field(s)", []), \
-            address_fields=base.read_in_config(config, "supplier address field(s)", []), \
-            website_fields=base.read_in_config(config, "supplier website field(s)", []), \
-            category_fields=base.read_in_config(config, "supplier category field(s)", []), \
-            additional_fields=additional_supplier_fields, exclude_categories=base.read_in_config(config, "exclude supplier categories", []))
+        suppliers = session.foodsoft_connector.get_supplier_data(name_fields=config.get("supplier name field(s)", []), \
+            address_fields=config.get("supplier address field(s)", []), \
+            website_fields=config.get("supplier website field(s)", []), \
+            category_fields=config.get("supplier category field(s)", []), \
+            additional_fields=additional_supplier_fields, exclude_categories=config.get("exclude supplier categories", []))
         locator = Nominatim(user_agent=f"{self.foodcoop} geolocator")
 
         foodcoop_addresses = []
-        fc_addresses_dict = base.read_in_config(config, "foodcoop addresses", {})
+        fc_addresses_dict = config.get("foodcoop addresses", {})
         for fc_address in fc_addresses_dict.keys():
             address = fc_addresses_dict[fc_address]['address']
             location = locator.geocode(address)
@@ -71,11 +70,11 @@ class ScriptRun(base.Run):
                 supplier.show_category = False
                 foodcoop_addresses.append(supplier)
 
-        supplier_name_prefix_delimiters = base.read_in_config(config, "supplier name prefix delimiters", [])
-        supplier_name_suffix_delimiters = base.read_in_config(config, "supplier name suffix delimiters", [])
-        category_name_prefix_delimiters = base.read_in_config(config, "category name prefix delimiters", [])
-        category_name_suffix_delimiters = base.read_in_config(config, "category name suffix delimiters", [])
-        style_by_supplier_category = base.read_in_config(config, "style by supplier category", {})
+        supplier_name_prefix_delimiters = config.get("supplier name prefix delimiters", [])
+        supplier_name_suffix_delimiters = config.get("supplier name suffix delimiters", [])
+        category_name_prefix_delimiters = config.get("category name prefix delimiters", [])
+        category_name_suffix_delimiters = config.get("category name suffix delimiters", [])
+        style_by_supplier_category = config.get("style by supplier category", {})
 
         for supplier in suppliers:
             supplier.show_category = False
@@ -103,7 +102,7 @@ class ScriptRun(base.Run):
                 suppliers.remove(supplier)
                 print(f"Location of supplier {supplier.name} not found ({supplier.address}), supplier removed from map.")
 
-        map_center_address = base.read_in_config(config, "map center", None)
+        map_center_address = config.get("map center", None)
         if map_center_address:
             map_center = locator.geocode(map_center_address)
         elif foodcoop_addresses:
@@ -111,8 +110,8 @@ class ScriptRun(base.Run):
         else:
             pass # TODO: what to do?
 
-        scroll_wheel_zoom = base.read_in_config(config, "scroll wheel zoom", False)
-        our_map = folium.Map(location=[map_center.latitude, map_center.longitude], zoom_start=base.read_in_config(config, "default zoom", 11), scrollWheelZoom=scroll_wheel_zoom, tiles=base.read_in_config(config, "tiles", "OpenStreetMap"))
+        scroll_wheel_zoom = config.get("scroll wheel zoom", False)
+        our_map = folium.Map(location=[map_center.latitude, map_center.longitude], zoom_start=config.get("default zoom", 11), scrollWheelZoom=scroll_wheel_zoom, tiles=config.get("tiles", "OpenStreetMap"))
         plugins.Fullscreen().add_to(our_map)
 
         for fc_address in foodcoop_addresses:
@@ -152,12 +151,3 @@ def popup_html(supplier):
             html += f"{value}</p>"
 
     return html
-
-if __name__ == "__main__":
-    importlib.invalidate_caches()
-    script = importlib.import_module("script_generic_test_import") # I don't know why we have to do this, but if the ScriptRun object is just initialized directly (run = ScriptRun(...)), then it doesn't load when we try to load in web ("AttributeError: Can't get attribute 'ScriptRun' on <module '__main__' from 'web.py'>")
-    run = script.ScriptRun(foodcoop="krautkoopf", configuration="Supplier X")
-    while run.next_possible_methods:
-        func = getattr(run, run.next_possible_methods[0].name)
-        func()
-    run.save()

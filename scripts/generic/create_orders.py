@@ -2,7 +2,6 @@
 Script for creating one or multiple Foodsoft orders for one supplier with fewer clicks, with the option of sending out a Foodsoft message to all members.
 """
 
-import importlib
 import datetime
 import time
 import babel.dates
@@ -13,8 +12,8 @@ from selenium.webdriver.firefox.service import Service as FirefoxService
 from webdriver_manager.firefox import GeckoDriverManager
 
 import base
-import foodsoft_article
-import foodsoft_article_import
+import script_libs.generic.foodsoft_article as foodsoft_article
+import script_libs.generic.foodsoft_article_import as foodsoft_article_import
 
 # Inputs this script's methods take
 create_orders_till = base.Input(name="create_orders_till", required=False, input_format="date")
@@ -261,12 +260,3 @@ def compose_order_str(message, orders, locale):
         if order.url:
             message += f" <a href='{order.url}' target='_blank'>Ansehen</a>"
     return message
-
-if __name__ == "__main__":
-    importlib.invalidate_caches()
-    script = importlib.import_module("script_generic_create_orders") # I don't know why we have to do this, but if the ScriptRun object is just initialized directly (run = ScriptRun(...)), then it doesn't load when we try to load in web ("AttributeError: Can't get attribute 'ScriptRun' on <module '__main__' from 'web.py'>")
-    run = script.ScriptRun(foodcoop="krautkoopf", configuration="Supplier X")
-    while run.next_possible_methods:
-        func = getattr(run, run.next_possible_methods[0].name)
-        func()
-    run.save()

@@ -1,7 +1,7 @@
 import csv
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
-import foodsoft_article
+import script_libs.generic.foodsoft_article as foodsoft_article
 
 def get_order_id_and_articles(session, driver, supplier_id):
     """

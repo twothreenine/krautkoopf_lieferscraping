@@ -1,5 +1,6 @@
 {% set title = configuration + ' bearbeiten' %}
 {% set back_to_main = True %}
+<a style="float: right" href="/{{fc}}/cs/{{configuration}}">Bearbeiten abbrechen</a>
 {% extends "layout.html" %}
 
 {% block body %}
@@ -16,5 +17,4 @@
         <br><br>
         <input type="submit" value="Speichern">
     </form>
-    <form action="/{{fc}}/cs/{{configuration}}"><input type='submit' value='Bearbeiten abbrechen'></form>
 {% endblock %}

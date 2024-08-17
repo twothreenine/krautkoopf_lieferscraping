@@ -2,12 +2,11 @@
 Script for converting a XLSX price list from HolperHof, A-8264 Hainersdorf into a CSV file for upload into Foodsoft.
 """
 
-import importlib
 import openpyxl
 
 import base
-import foodsoft_article
-import foodsoft_article_import
+import script_libs.generic.foodsoft_article as foodsoft_article
+import script_libs.generic.foodsoft_article_import as foodsoft_article_import
 
 # Inputs this script's methods take
 price_list_input = base.Input(name="price_list_input", required=True, accepted_file_types=[".xlsx"], input_format="file")
@@ -141,12 +140,3 @@ class ScriptRun(base.Run):
 
     def kg_price_str(self, article_price):
         return "{:.2f} €/kg".format(article_price).replace(".", ",")
-
-if __name__ == "__main__":
-    importlib.invalidate_caches()
-    script = importlib.import_module("script_krautkoopf_HolperHof_import") # I don't know why we have to do this, but if the ScriptRun object is just initialized directly (run = ScriptRun(...)), then it doesn't load when we try to load in web ("AttributeError: Can't get attribute 'ScriptRun' on <module '__main__' from 'web.py'>")
-    run = script.ScriptRun(foodcoop="krautkoopf", configuration="Supplier X")
-    while run.next_possible_methods:
-        func = getattr(run, run.next_possible_methods[0].name)
-        func()
-    run.save()

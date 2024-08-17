@@ -3,7 +3,6 @@ Collects all articles from your Foodsoft instance and imports them into WooComme
 In case you want to exclude certain suppliers, you can do that by using supplier categories in Foodsoft.
 """
 
-import importlib
 import re
 import math
 import html
@@ -13,9 +12,9 @@ import woocommerce
 
 import base
 import foodsoft
-import foodsoft_article
-import foodsoft_article_import
-import woocommerce_product
+import script_libs.generic.foodsoft_article as foodsoft_article
+import script_libs.generic.foodsoft_article_import as foodsoft_article_import
+import script_libs.generic.woocommerce_product as woocommerce_product
 
 # Inputs this script's methods take
 consumer_key = base.Input(name="consumer_key", required=True, input_format="text", example="ck_123")
@@ -241,8 +240,7 @@ class ScriptRun(base.Run):
             p_c = p.get("categories")
             if p_c:
                 p_c_id = p_c[0].get("id")
-                matching_categories = [pc for pc in product_categories_from_woocommerce if pc.no == p_c_id]
-                p_category = matching_categories[0]
+                p_category = next((pc for pc in product_categories_from_woocommerce if pc.no == p_c_id))
             pfw = woocommerce_product.Product(sku=p.get("sku"), name=p.get("name"), description=p.get("description"), regular_price=p.get("regular_price"), category=p_category, attributes=p.get("attributes"))
             pfw.no = p.get("id")
             products_from_woocommerce.append(pfw)
@@ -384,10 +382,8 @@ class ScriptRun(base.Run):
             regex = re.search(regex_for_categories, category_name)
             if regex:
                 category_name = regex.group(1)
-        matching_categories = [c for c in self.product_categories if c.name == category_name]
-        if matching_categories:
-            cat = matching_categories[0]
-        else:
+        cat = next((c for c in self.product_categories if c.name == category_name))
+        if not cat:
             cat = woocommerce_product.ProductCategory(name=category_name)
             self.product_categories.append(cat)
         if super_category_name:
@@ -400,9 +396,9 @@ class ScriptRun(base.Run):
         return cat
 
     def find_article_category_number(self, category_name):
-        matching_categories = [c for c in self.article_categories if c.name == category_name]
-        if matching_categories:
-            return matching_categories[0].number
+        matching_category = next((c for c in self.article_categories if c.name == category_name))
+        if matching_category:
+            return matching_category.number
 
     def apply_super_category_name(self, category_name, sc_name, sc_details):
         if sc_details.get("omit category"):
@@ -482,12 +478,3 @@ def replace_article_manufacturer(article, supplier, supplier_custom_field_for_wh
     if not article.manufacturer and supplier_custom_field_for_whether_replacing_articles_manufacturer_if_empty and next((af for af in supplier.additional_fields if af.get('foodsoft field(s)') == supplier_custom_field_for_whether_replacing_articles_manufacturer_if_empty), False):
         article.manufacturer = supplier.name
     return article
-
-if __name__ == "__main__":
-    importlib.invalidate_caches()
-    script = importlib.import_module("script_generic_foodsoft_articles_to_woocommerce") # I don't know why we have to do this, but if the ScriptRun object is just initialized directly (run = ScriptRun(...)), then it doesn't load when we try to load in web ("AttributeError: Can't get attribute 'ScriptRun' on <module '__main__' from 'web.py'>")
-    run = script.ScriptRun(foodcoop="krautkoopf", configuration="Produktkatalog")
-    while run.next_possible_methods:
-        func = getattr(run, run.next_possible_methods[0].name)
-        func()
-    run.save()

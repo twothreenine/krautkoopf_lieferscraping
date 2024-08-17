@@ -2,7 +2,7 @@ import csv
 import copy
 
 import base
-import foodsoft_article
+import script_libs.generic.foodsoft_article as foodsoft_article
 
 def remove_articles_to_ignore(articles):
     return [x for x in articles if not x.ignore]

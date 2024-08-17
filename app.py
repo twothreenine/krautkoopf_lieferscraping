@@ -8,6 +8,7 @@ import yaml
 import importlib
 from zipfile import ZipFile
 import babel.dates
+import datetime
 
 import base
 import foodsoft
@@ -32,10 +33,24 @@ def get_data(key):
     global app
     return app.data.get(key)
 
+def update_data(key, value):
+    global app
+    app.data[key] = value
+
 def delete_data(key):
     global app
     if app.data.get(key):
         app.data.pop(key)
+
+def clean_data(): # TODO: call this regularly
+    min_datetime = datetime.datetime.now() - datetime.timedelta(hours=2)
+    global app
+    for key, value in app.data.items():
+        if value.last_used < min_datetime:
+            delete_data(key)
+
+def get_base_script_dir():
+    return "scripts"
 
 def get_instance():
     return flask.session["instance"]
@@ -60,7 +75,15 @@ def reset_foodsoft_connector():
 def base_download_route():
     return f"/{get_instance()}/cs/download/"
 
+class SessionData:
+    def __init__(self):
+        self.last_used = datetime.datetime.now()
+        self.connectors = {}
+
 class Session:
+    """
+    Constructed and delivered to a ScriptRun when one of its methods is called. Replace this by calling app.get_... from scripts instead?
+    """
     def __init__(self):
         self.instance = get_instance()
         self.foodsoft_connector = get_foodsoft_connector()
@@ -167,40 +190,42 @@ def configuration_link(configuration):
 def display_output_link(configuration, run_name):
     return flask.render_template('display_output_link.html', foodcoop=get_instance(), configuration=configuration, run_name=run_name)
 
+class Script:
+    def __init__(self, directory, file_name):
+        self.directory = directory
+        self.name = file_name.replace(".py", "")
+        self.key = f"{directory}.{self.name}"
+        self.path = os.path.join(get_base_script_dir(), directory, file_name)
+
+def get_scripts_from_path(base_dir, sub_dir):
+    dir_script_files = [f for f in os.listdir(os.path.join(base_dir, sub_dir)) if f.endswith(".py")]
+    scripts = []
+    for f in dir_script_files:
+        scripts.append(Script(directory=sub_dir, file_name=f))
+    return scripts
+
 def available_scripts():
-    script_files = [f for f in os.listdir() if f.startswith("script_") and f.endswith(".py")]
-    generic_scripts = []
-    foodcoop_scripts = []
-    for f in script_files:
-        f = f.replace("script_", "").replace(".py", "")
-        f_parts = f.split("_", 1)
-        if f_parts[0] == "generic":
-            generic_scripts.append(f_parts)
-        else:
-            foodcoop_scripts.append(f_parts)
-    return generic_scripts, foodcoop_scripts
+    base_dir = get_base_script_dir()
+    scripts = get_scripts_from_path(base_dir, "generic")
+    other_script_directories = [dir for dir in os.listdir(base_dir) if dir != "generic"]
+    for sd in other_script_directories:
+        scripts.extend(get_scripts_from_path(base_dir, sd))
+    return scripts
 
 def script_options(selected_script=None):
-    generic_scripts, foodcoop_scripts = available_scripts()
+    scripts = available_scripts()
     script_options = "<option value=''>Skript auswählen</option>"
-    for script in generic_scripts:
-        value = script[0] + "_" + script[1]
+    for script in scripts:
         selected = ""
-        if value == selected_script:
+        if script.key == selected_script:
             selected = "selected"
-        script_options += "<option value='{}' {}>{}</option>".format(value, selected, script[1])
-    for script in foodcoop_scripts:
-        value = script[0] + "_" + script[1]
-        selected = ""
-        if value == selected_script:
-            selected = "selected"
-        script_options += "<option value='{}' {}>{}</option>".format(value, selected, script[0].capitalize() + ": " + script[1])
+        script_options += "<option value='{}' {}>{}</option>".format(script.key, selected, f"{script.directory.capitalize()}: {script.name}")
     return script_options
 
 def import_script(configuration):
     importlib.invalidate_caches()
     config = base.read_config(foodcoop=get_instance(), configuration=configuration)
-    script_name = "script_" + base.read_in_config(config=config, detail="Script name")
+    script_name = f"{get_base_script_dir()}.{config.get('Script name')}"
     script = importlib.import_module(script_name)
     return script
 
@@ -238,7 +263,9 @@ def output_link_with_download_button(configuration, script, run_name):
         else:
             source = zip_download(configuration, run_name)
         form_content = f"<input name='origin' value='/{get_instance()}/cs/{configuration}/display/{run_name}' hidden><input type='submit' value='⤓'>"
-    progress_bar = '<progress id="run" value="{}" max="100"></progress>'.format(run.completion_percentage)
+    progress_bar = ''
+    if run:
+        progress_bar = flask.render_template('progress_bar.html', completion_percentage=run.completion_percentage)
     return flask.render_template('output_link_with_download_button.html', source=source, form_content=form_content, affix=output_link, progress_bar=progress_bar)
 
 def all_download_buttons(configuration, run_name):
@@ -252,13 +279,13 @@ def all_download_buttons(configuration, run_name):
         content += flask.render_template('download_button.html', source=source, value="⤓ " + file, affix="", foodcoop=get_instance(), configuration=configuration, run_name=run_name)
     return content
 
-def display(path, display_type="display"):
+def display(configuration, run_name, display_type="display"):
     display_content = ""
-    file_path = os.path.join(path, display_type)
+    file_path = os.path.join("data", get_instance(), configuration, run_name, display_type)
     if os.path.exists(file_path):
         files = [f for f in os.listdir(file_path)]
         for file in files:
-            with open(os.path.join(path, display_type, file), encoding="utf-8") as text_file:
+            with open(os.path.join(file_path, file), encoding="utf-8") as text_file:
                 content = text_file.read()
                 content = convert_urls_to_links(content)
                 content = content.replace("\n", "<br>")
@@ -328,9 +355,8 @@ def add_config_variable_field(detail, config, config_variables, special_variable
         description = ""
         if detail in config:
             value = config[detail]
-        config_variables_of_this_name = [variable for variable in config_variables if variable.name == detail]
-        if config_variables_of_this_name:
-            variable = config_variables_of_this_name[0]
+        variable = next((v for v in config_variables if v.name == detail))
+        if variable:
             if variable.required:
                 required = "required"
             if variable.example:
@@ -499,14 +525,14 @@ def switch_instance_page(requested_instance, request_path=None, submitted_form=N
 
 def configuration_page(configuration):
     config = base.read_config(foodcoop=get_instance(), configuration=configuration)
-    script_name = base.read_in_config(config, "Script name")
+    script_name = config.get("Script name")
     script = import_script(configuration=configuration)
     output_content = ""
     outputs = base.get_outputs(foodcoop=get_instance(), configuration=configuration)
     if not outputs:
         output_content += "Keine Ausführungen gefunden."
     outputs.reverse()
-    number_of_runs_to_list = base.read_in_config(config, "number of runs to list", 5)
+    number_of_runs_to_list = config.get("number of runs to list", 5)
     for index in range(number_of_runs_to_list):
         if index+1 > len(outputs):
             break
@@ -524,38 +550,46 @@ def configuration_page(configuration):
 
     return flask.render_template('configuration.html', fc=get_instance(), foodcoop=get_instance().capitalize(), configuration=configuration, output_content=output_content, config_content=config_content)
 
-def run_page(configuration, script, run):
-    downloads = all_download_buttons(configuration, run.name)
-    script_name = base.read_in_config(base.read_config(get_instance(), configuration), "Script name")
+def run_page(configuration, script, run, run_name):
+    downloads = all_download_buttons(configuration, run_name)
+    script_name = base.read_config(get_instance(), configuration).get("Script name")
 
     log_entries = []
-    for entry in run.log:
-        entry_string = get_locale_string(term=entry.action, script_name=script_name, enforce_return=True)
-        if entry.done_by:
-            entry_string += f" von {entry.done_by}"
-        entry_string += f" am {babel.dates.format_datetime(datetime=entry.datetime, format='short', locale=get_locale())}"
-        log_entries.append(entry_string)
+    if run:
+        for entry in run.log:
+            entry_string = get_locale_string(term=entry.action, script_name=script_name, enforce_return=True)
+            if entry.done_by:
+                entry_string += f" von {entry.done_by}"
+            entry_string += f" am {babel.dates.format_datetime(datetime=entry.datetime, format='short', locale=get_locale())}"
+            log_entries.append(entry_string)
     log_text = ", ".join(log_entries)
     if log_text:
         log_text = log_text[0].upper() + log_text[1:]
         log_text += "."
 
     continue_content = ""
-    for option in run.next_possible_methods:
-        option_locales = get_locales()[script_name][option.name]
-        inputs = ""
-        for ipt in option.inputs:
-            inputs = add_input_field(ipt=ipt, script_name=script_name, input_content=inputs)
-        continue_content += flask.render_template('continue_option.html', fc=get_instance(), configuration=configuration, run_name=run.name, option_name=option.name, option_locales=option_locales, inputs=inputs)
+    if run:
+        for option in run.next_possible_methods:
+            option_locales = get_locales()[script_name][option.name]
+            inputs = ""
+            for ipt in option.inputs:
+                inputs = add_input_field(ipt=ipt, script_name=script_name, input_content=inputs)
+            continue_content += flask.render_template('continue_option.html', fc=get_instance(), configuration=configuration, run_name=run_name, option_name=option.name, option_locales=option_locales, inputs=inputs)
+    else:
+        continue_content = f"<p>Das in dieser Ausführung verwendete Skript scheint umbenannt, verschoben oder gelöscht worden zu sein. Diese Ausführung kann daher leider nur eingeschränkt abgerufen und nicht mehr fortgesetzt werden.</p>"
     display_content = ""
-    display_content += display(path=run.path, display_type="display")
-    display_content += display(path=run.path, display_type="details")
-    return flask.render_template('run.html', fc=get_instance(), foodcoop=get_instance().capitalize(), configuration=configuration, run=run, log_text=log_text, completion_percentage=run.completion_percentage, downloads=downloads, continue_content=continue_content, display_content=display_content)
+    display_content += display(configuration, run_name, display_type="display")
+    display_content += display(configuration, run_name, display_type="details")
+    if run:
+        progress_bar = flask.render_template('progress_bar.html', completion_percentage=run.completion_percentage)
+    else:
+        progress_bar = "unbekannt"
+    return flask.render_template('run.html', fc=get_instance(), foodcoop=get_instance().capitalize(), configuration=configuration, run_name=run_name, log_text=log_text, progress_bar=progress_bar, downloads=downloads, continue_content=continue_content, display_content=display_content)
 
 def edit_configuration_page(configuration):
     config_content = ""
     config = base.read_config(foodcoop=get_instance(), configuration=configuration)
-    script_name = base.read_in_config(config, "Script name")
+    script_name = config.get("Script name")
     script = import_script(configuration=configuration)
     config_variables = script.config_variables()
     special_variables = ["Script name", "number of runs to list", "last imported run"]
@@ -567,7 +601,7 @@ def edit_configuration_page(configuration):
             config_content += f"<label>{get_locales()['base']['last imported run']}: "
             config_content += "<select name='last imported run'>"
             config_content += f"<option>{get_locales()['base']['none (feminine)']}</option>"
-            last_imported_run = base.read_in_config(config, "last imported run", "")
+            last_imported_run = config.get("last imported run", "")
             for run in runs:
                 selected = ""
                 if run == last_imported_run:
@@ -587,7 +621,7 @@ def edit_configuration_page(configuration):
             continue
         config_content = add_config_variable_field(detail=variable.name, config=config, config_variables=config_variables, special_variables=special_variables, script_name=script_name, config_content=config_content)
 
-    number_of_runs_to_list = base.read_in_config(config, "number of runs to list", 5)
+    number_of_runs_to_list = config.get("number of runs to list", 5)
 
     return flask.render_template('edit_configuration.html', fc=get_instance(), foodcoop=get_instance().capitalize(), base_locales=get_locales()["base"], configuration=configuration, number_of_runs_to_list=number_of_runs_to_list, config_content=config_content, script_options=script_options(selected_script=config["Script name"]))
 
@@ -622,10 +656,7 @@ def do_main(fc):
         flask.session["instance"] = None
         flask.flash("Logout erfolgreich.")
         request_path = submitted_form.get("request_path")
-        if request_path:
-            return flask.make_response(login_page(fc, request_path))
-        else:
-            return flask.make_response(root_page())
+        return flask.make_response(login_page(fc, request_path))
     elif check_login(submitted_form, flask.request.cookies, fc):
         if 'new configuration' in submitted_form:
             resp = flask.make_response(new_configuration_page())
@@ -659,11 +690,11 @@ def display_run(fc, configuration, run_name):
         script = import_script(configuration=configuration)
         path = run_path(configuration, run_name)
         run = script.ScriptRun.load(path=path)
-        if "method" in submitted_form:
+        if "method" in submitted_form and run:
             method = submitted_form.get('method')
             parameters = {}
             # script_method = getattr(script, method)
-            script_method = [sm for sm in run.next_possible_methods if sm.name == method][0]
+            script_method = next((sm for sm in run.next_possible_methods if sm.name == method))
             if script_method.inputs:
                 for ipt in script_method.inputs:
                     value = None
@@ -684,9 +715,9 @@ def display_run(fc, configuration, run_name):
             func = getattr(run, method)
             func(Session(), **parameters)
             run.save()
-            script_name = base.read_in_config(base.read_config(fc, configuration), "Script name")
+            script_name = base.read_config(fc, configuration).get("Script name")
             flask.flash(get_locales()[script_name][method]["name"] + " wurde ausgeführt.")
-        return flask.make_response(run_page(configuration, script, run))
+        return flask.make_response(run_page(configuration, script, run, run_name))
     else:
         return flask.make_response(login_page(fc, flask.request.full_path, submitted_form))
 
@@ -698,7 +729,8 @@ def start_script_run(fc, configuration):
         script = import_script(configuration=configuration)
         run = script.ScriptRun(foodcoop=get_instance(), configuration=configuration)
         run.save()
-        return flask.make_response(run_page(configuration, script, run))
+        run_name = run.name
+        return flask.make_response(run_page(configuration, script, run, run_name))
     else:
         return flask.make_response(login_page(fc, flask.request.full_path, submitted_form))
 

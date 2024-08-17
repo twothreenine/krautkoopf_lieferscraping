@@ -5,7 +5,6 @@ Sojabohnen im Glas: 320g /190g Abtropfgewicht
 Hanföl kaltgepresst: gleiches Produkt 2x eingetragen
 """
 
-import importlib
 from bs4 import BeautifulSoup
 import requests
 import undetected_chromedriver as uc
@@ -23,8 +22,8 @@ import re
 import time
 
 import base
-import foodsoft_article
-import foodsoft_article_import
+import script_libs.generic.foodsoft_article as foodsoft_article
+import script_libs.generic.foodsoft_article_import as foodsoft_article_import
 
 # Inputs this script's methods take
 # no inputs needed
@@ -187,7 +186,7 @@ class ScriptRun(base.Run):
 
     def generate_csv(self, session):
         config = base.read_config(self.foodcoop, self.configuration)
-        supplier_id = base.read_in_config(config, "Foodsoft supplier ID", None)
+        supplier_id = config.get("Foodsoft supplier ID", None)
         articles_from_foodsoft, self.notifications = foodsoft_article_import.get_articles_from_foodsoft(locales=session.locales, supplier_id=supplier_id, foodsoft_connector=session.foodsoft_connector, notifications=self.notifications)
         self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(locales=session.locales, foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, notifications=self.notifications)
         self.notifications = foodsoft_article_import.write_articles_csv(locales=session.locales, file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
@@ -205,12 +204,3 @@ class ScriptRun(base.Run):
         self.next_possible_methods = []
         self.completion_percentage = 100
         self.log.append(base.LogEntry(action="marked as imported", done_by=base.full_user_name(session)))
-
-if __name__ == "__main__":
-    importlib.invalidate_caches()
-    script = importlib.import_module("script_krautkoopf_Renner_import") # I don't know why we have to do this, but if the ScriptRun object is just initialized directly (run = ScriptRun(...)), then it doesn't load when we try to load in web ("AttributeError: Can't get attribute 'ScriptRun' on <module '__main__' from 'web.py'>")
-    run = script.ScriptRun(foodcoop="krautkoopf", configuration="Supplier X")
-    while run.next_possible_methods:
-        func = getattr(run, run.next_possible_methods[0].name)
-        func()
-    run.save()

@@ -3,7 +3,7 @@ Script for reading out the webshop from Fairfood Freiburg (screen-scraping) and 
 """
 
 import base
-import lib_Fairfood
+import script_libs.krautkoopf.Fairfood as lib_Fairfood
 
 def config_variables(): # List of the special config variables this script uses, whether they are required and how they could look like
     return [
@@ -24,10 +24,3 @@ class ScriptRun(lib_Fairfood.ScriptRun):
     def __init__(self, foodcoop, configuration):
         super().__init__(foodcoop=foodcoop, configuration=configuration)
         self.next_possible_methods = [lib_Fairfood.read_webshop]
-
-if __name__ == "__main__":
-    run = ScriptRun(foodcoop="Test coop", configuration="Test supplier")
-    while run.next_possible_methods:
-        func = getattr(run, run.next_possible_methods[0].name)
-        func(session) # TODO: define session
-    run.save()

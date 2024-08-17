@@ -2,14 +2,13 @@
 Script for converting a PDF price list from Biohof Lebenbauer, A-8230 Hartberg into a CSV file for upload into Foodsoft.
 """
 
-import importlib
 import tabula
 import pandas
 import re
 
 import base
-import foodsoft_article
-import foodsoft_article_import
+import script_libs.generic.foodsoft_article as foodsoft_article
+import script_libs.generic.foodsoft_article_import as foodsoft_article_import
 
 # Inputs this script's methods take
 price_list_input = base.Input(name="price_list_input", required=True, accepted_file_types=[".pdf"], input_format="file")
@@ -235,7 +234,7 @@ class ScriptRun(base.Run):
                                         self.notifications.append(f"Keine Einheit für '{name}' gefunden, verwende Einheit {unit}.")
                                 if current_category.name == "Äpfel":
                                     if apfel_matches := base.containing_strings_check([name], ["birne", "traube", "pfirsich", "nektarine", "quitte", "zwets"]):
-                                        current_category = [c for c in self.categories if c.name == "Obst & Gemüse"][0]
+                                        current_category = next((c for c in self.categories if c.name == "Obst & Gemüse"))
                                     else:
                                         name = f"Äpfel {name}"
                                 while name.endswith(".") or name.endswith(","):
@@ -423,12 +422,3 @@ class ScriptRun(base.Run):
                     print(f"Right row contains still more than 2 columns: {str(right_row)}")
             tables[1].append(right_row)
         return tables
-
-if __name__ == "__main__":
-    importlib.invalidate_caches()
-    script = importlib.import_module("script_eggenlend_Lebenbauer_import") # I don't know why we have to do this, but if the ScriptRun object is just initialized directly (run = ScriptRun(...)), then it doesn't load when we try to load in web ("AttributeError: Can't get attribute 'ScriptRun' on <module '__main__' from 'web.py'>")
-    run = script.ScriptRun(foodcoop="krautkoopf", configuration="Supplier X")
-    while run.next_possible_methods:
-        func = getattr(run, run.next_possible_methods[0].name)
-        func()
-    run.save()

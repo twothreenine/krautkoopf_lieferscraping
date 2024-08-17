@@ -5,11 +5,10 @@ Script for reading out the webshop from Biohof Pranger, A-8354 St. Anna am Aigen
 from bs4 import BeautifulSoup
 import requests
 import re
-import importlib
 
 import base
-import foodsoft_article
-import foodsoft_article_import
+import script_libs.generic.foodsoft_article as foodsoft_article
+import script_libs.generic.foodsoft_article_import as foodsoft_article_import
 
 # Inputs this script's methods take
 # none
@@ -36,9 +35,9 @@ class ScriptRun(base.Run):
 
     def read_webshop(self, session):
         config = base.read_config(self.foodcoop, self.configuration)
-        categories_to_ignore = base.read_in_config(config, "categories to ignore", [])
-        subcategories_to_ignore = base.read_in_config(config, "subcategories to ignore", [])
-        articles_to_ignore = base.read_in_config(config, "articles to ignore", [])
+        categories_to_ignore = config.get("categories to ignore", [])
+        subcategories_to_ignore = config.get("subcategories to ignore", [])
+        articles_to_ignore = config.get("articles to ignore", [])
         self.articles = []
         self.categories = []
         self.ignored_articles = []
@@ -63,13 +62,13 @@ class ScriptRun(base.Run):
 
     def generate_csv(self, session):
         config = base.read_config(self.foodcoop, self.configuration)
-        supplier_id = base.read_in_config(config, "Foodsoft supplier ID", None)
+        supplier_id = config.get("Foodsoft supplier ID", None)
         version_delimiter = "_v"
         articles_from_foodsoft, self.notifications = foodsoft_article_import.get_articles_from_foodsoft(locales=session.locales, supplier_id=supplier_id, foodsoft_connector=session.foodsoft_connector, notifications=self.notifications, version_delimiter=version_delimiter)
         self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(locales=session.locales, foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, version_delimiter=version_delimiter, notifications=self.notifications)
         self.articles = foodsoft_article_import.version_articles(articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, version_delimiter=version_delimiter, compare_name=False)
         self.notifications = foodsoft_article_import.write_articles_csv(locales=session.locales, file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, version_delimiter=version_delimiter, notifications=self.notifications)
-        message_prefix = base.read_in_config(config, "message prefix", "")
+        message_prefix = config.get("message prefix", "")
         message = foodsoft_article_import.compose_articles_csv_message(locales=session.locales, supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_subcategories=self.ignored_subcategories, ignored_articles=self.ignored_articles, notifications=self.notifications, prefix=message_prefix)
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Zusammenfassung"), content=message)
 
@@ -334,12 +333,3 @@ def get_articles(category, articles, ignored_articles, articles_to_ignore):
             articles.append(article)
 
     return articles, ignored_articles
-
-if __name__ == "__main__":
-    importlib.invalidate_caches()
-    script = importlib.import_module("script_krautkoopf_Pranger_import") # I don't know why we have to do this, but if the ScriptRun object is just initialized directly (run = ScriptRun(...)), then it doesn't load when we try to load in web ("AttributeError: Can't get attribute 'ScriptRun' on <module '__main__' from 'web.py'>")
-    run = script.ScriptRun(foodcoop="krautkoopf", configuration="Biohof Pranger")
-    while run.next_possible_methods:
-        func = getattr(run, run.next_possible_methods[0].name)
-        func(session) # TODO: define session
-    run.save()

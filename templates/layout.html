@@ -8,8 +8,14 @@
 {% include "header.html" %}
 
 {% if back_to_main %}
-    <form action="/{{fc}}/cs"><input type='submit' value='Zurück zum Hauptmenü'></form>
+    <p>
+        <a href='/{{fc}}/cs'>Zurück zum Hauptmenü</a>
+        {% if secondary_navigation %}
+            {{ secondary_navigation|safe() }}
+        {% endif %}
+    </p>
 {% endif %}
+
 {% with messages = get_flashed_messages() %}
     {% if messages %}
         {% for message in messages %}
@@ -17,4 +23,5 @@
         {% endfor %}
     {% endif %}
 {% endwith %}
+
 {% block body %}{% endblock %}

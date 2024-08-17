@@ -1,12 +1,12 @@
-{% set title = configuration + " - Ausführung " + run.name %}
+{% set title = configuration + " - Ausführung " + run_name %}
 {% set back_to_main = True %}
+{% include "back_to_configuration_link.html" %}
 {% extends "layout.html" %}
 
 {% block body %}
-    {% include "back_to_configuration_button.html" %}
-    <h1>{{configuration}} - Ausführung {{run.name}}</h1>
+    <h1>{{configuration}} - Ausführung {{run_name}}</h1>
     <p>{{log_text}}</p>
-    <p><label for="run">Fortschritt: </label><progress id="run" value="{{completion_percentage}}" max="100"/></p>
+    <p><label for="run">Fortschritt: </label>{{ progress_bar|safe() }}</p>
     {{ downloads|safe() }}
     {{ continue_content|safe() }}
     {{ display_content|safe() }}
