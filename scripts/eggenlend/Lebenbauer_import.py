@@ -73,7 +73,7 @@ class ScriptRun(base.Run):
         article_details_rest = config.get("article details rest", {})
         unit_regex = r"(?!\d*\s?\%)(?:1⁄2|1⁄4|\d+),?\/?\.?\d*\s?g?\s?(?:ml.?)?(?:lt.?)?(?:d?kg ?)?(?:Kg ?)?(?:Pkg.?)?(?:pkg.?)?(?:Stk.?)?(?:stk.?)?"
 
-        dfs = tabula.read_pdf(price_list_input, lattice=True, pages='all', encoding='utf-8', pandas_options={'header': None})
+        dfs = tabula.read_pdf(price_list_input, lattice=True, pages='all', encoding='ISO-8859-15', pandas_options={'header': None})
         raw_tables = [df.where(df.notnull(), None).values.tolist() for df in dfs]
         raw_tables.pop(0) # header table with information about the farm
         split_tables = []
@@ -138,7 +138,7 @@ class ScriptRun(base.Run):
                         if base.equal_strings_check(list1=[category.name], list2=categories_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[category.name], list2=categories_to_ignore_containing, case_sensitive=False, strip=False):
                             self.ignored_categories.append(category)
                         else:
-                            if "GEMÜSE - " in category.name:
+                            if "GEMÜSE - " in category.name or "G EMÜSE - " in category.name:
                                 category.name = "Obst & Gemüse"
                             self.categories.append(category)
                         current_category = category
@@ -275,7 +275,7 @@ class ScriptRun(base.Run):
                                         for variant in product_variants_regex_match.groups()[1:]:
                                             product_variant_names.append(f"{name} {variant}")
                                 elif "paprika" in name.casefold() and category_name == "Obst & Gemüse":
-                                    variants = name.casefold().replace("hell- u. dunkelgrün", "hellgrün, dunkelgrün").split(",")
+                                    variants = name.casefold().replace("(hell)grün", "hellgrün, grün").split(",")
                                     if variants:
                                         product_variant_names = []
                                         name = " ".join(variants[0].split(" ")[:-1])
