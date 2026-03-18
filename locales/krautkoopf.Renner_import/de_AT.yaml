@@ -15,4 +15,4 @@ mark_as_imported:
 # inputs
 price_list:
     name: Preisliste
-    description: XSLX
+    description: XLSX

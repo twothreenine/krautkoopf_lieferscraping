@@ -133,7 +133,7 @@ def check_login(submitted_form, cookies, instance):
         feedback = ""
         email = submitted_form.get('email')
         password = submitted_form.get('password')
-        foodsoft_address = get_settings().get('foodsoft_url')
+        foodsoft_address = get_settings().get('connectors').get('Foodsoft').get('url') # TODO: for every connector
         foodsoft_connector = foodsoft.FSConnector(url=foodsoft_address, user=email, password=password)
         foodsoft_connector.add_user_data(workgroups=True)
         if foodsoft_connector._session:
@@ -300,6 +300,7 @@ def add_input_field(ipt, script_name, input_content):
     field_type = "input"
     input_type = ""
     input_attributes = ""
+    inner_elements = ""
     file_types = ",".join(ipt.accepted_file_types)
 
     if not ipt.input_format:
@@ -319,8 +320,15 @@ def add_input_field(ipt, script_name, input_content):
             input_attributes = f"accept='{file_types}'"
         if ipt.input_format == "files":
             input_attributes += " multiple"
+    elif ipt.input_format == "select":
+        field_type = "select"
+        for value, label in ipt.options.items():
+            inner_elements += f'<option value="{value}">{label}</option>'
     else:
         input_type = f"type='{ipt.input_format}'"
+
+    for oa in ipt.other_attributes:
+        input_attributes += f" {oa}" # like min="1" or step="0.01"
 
     placeholder = ""
     if ipt.example:
@@ -333,9 +341,11 @@ def add_input_field(ipt, script_name, input_content):
     description = get_locale_string(term=str(ipt.name), substring='description', script_name=script_name)
     if description:
         description = f" ({description})"
+    elif ipt.description:
+        description = f" ({ipt.description})"
 
     input_content += f"<label>{get_locale_string(term=str(ipt.name), substring='name', script_name=script_name, enforce_return=True)}: "
-    input_content += f"<{field_type} {input_type} name='{ipt.name}' {placeholder} {required} {input_attributes}></{field_type}>"
+    input_content += f"<{field_type} {input_type} name='{ipt.name}' {placeholder} {required} {input_attributes}>{inner_elements}</{field_type}>"
     input_content += f"</label>{description}"
 
     return input_content
@@ -355,7 +365,7 @@ def add_config_variable_field(detail, config, config_variables, special_variable
         description = ""
         if detail in config:
             value = config[detail]
-        variable = next((v for v in config_variables if v.name == detail))
+        variable = next((v for v in config_variables if v.name == detail), None)
         if variable:
             if variable.required:
                 required = "required"
@@ -699,10 +709,9 @@ def display_run(fc, configuration, run_name):
                 for ipt in script_method.inputs:
                     value = None
                     if ipt.input_format == "files":
-                        files = flask.request.files.getall(ipt.name)
-                        for f in files:
-                            print(f.content_type) # TODO: check if mime type matches accepted file types & TODO: test multi-file upload
-                        value = copy.deepcopy(files)
+                        files = flask.request.files.getlist(ipt.name) # TODO: check if mime type matches accepted file types
+                        if files and files[0].filename: # if no file is submitted, files.getlist(...) returns a list with an empty FileStorage object with an empty filename.
+                            value = files # copy.deepcopy(files)
                     elif ipt.accepted_file_types or ipt.input_format == "file":
                         file_object = flask.request.files.get(ipt.name)
                          # TODO: check if mime type matches accepted file types

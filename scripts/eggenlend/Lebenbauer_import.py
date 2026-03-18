@@ -53,338 +53,87 @@ class ScriptRun(base.Run):
     def convert_price_list(self, session, price_list_input):
         config = base.read_config(self.foodcoop, self.configuration)
         supplier_id = config.get("Foodsoft supplier ID")
-        discount_percentage = config.get("discount percentage", 0)
-        piece_unit_strings = config.get("piece unit strings", [])
-        other_unit_strings = config.get("other unit strings", [])
-        category_strings_to_ignore = config.get("category strings to ignore", [])
-        articles_without_price = config.get("articles without price", [])
-        strings_to_remove_in_names = config.get("strings to remove in names", [])
-        strings_to_keep_in_names = config.get("strings to keep in names", []) # TODO: move in article note?
-        mispelled_units = config.get("mispelled units", {})
-        articles_to_ignore_exact = config.get("ignore articles by name (exact, case-sensitive)", [])
-        articles_to_ignore_containing = config.get("ignore articles by name (containing, case-insensitive)", [])
-        categories_to_ignore_exact = config.get("ignore categories by name (exact, case-sensitive)", [])
-        categories_to_ignore_containing = config.get("ignore categories by name (containing, case-insensitive)", [])
-        piece_articles_exact = config.get("piece articles per category (exact, case-sensitive)", {})
-        piece_articles_containing = config.get("piece articles per category (containing, case-insensitive)", {})
-        recalculate_units = config.get("recalculate units", {})
-        resort_articles_in_categories = config.get("resort articles in categories", {})
-        article_details = config.get("article details", {})
-        article_details_rest = config.get("article details rest", {})
-        unit_regex = r"(?!\d*\s?\%)(?:1⁄2|1⁄4|\d+),?\/?\.?\d*\s?g?\s?(?:ml.?)?(?:lt.?)?(?:d?kg ?)?(?:Kg ?)?(?:Pkg.?)?(?:pkg.?)?(?:Stk.?)?(?:stk.?)?"
+        conf = Config()
+        conf.discount_percentage = config.get("discount percentage", 0)
+        conf.piece_unit_strings = config.get("piece unit strings", [])
+        conf.other_unit_strings = config.get("other unit strings", [])
+        conf.category_strings_to_ignore = config.get("category strings to ignore", [])
+        conf.articles_without_price = config.get("articles without price", [])
+        conf.strings_to_remove_in_names = config.get("strings to remove in names", [])
+        conf.strings_to_keep_in_names = config.get("strings to keep in names", []) # TODO: move in article note?
+        conf.mispelled_units = config.get("mispelled units", {})
+        conf.articles_to_ignore_exact = config.get("ignore articles by name (exact, case-sensitive)", [])
+        conf.articles_to_ignore_containing = config.get("ignore articles by name (containing, case-insensitive)", [])
+        conf.categories_to_ignore_exact = config.get("ignore categories by name (exact, case-sensitive)", [])
+        conf.categories_to_ignore_containing = config.get("ignore categories by name (containing, case-insensitive)", [])
+        conf.piece_articles_exact = config.get("piece articles per category (exact, case-sensitive)", {})
+        conf.piece_articles_containing = config.get("piece articles per category (containing, case-insensitive)", {})
+        conf.recalculate_units = config.get("recalculate units", {})
+        conf.resort_articles_in_categories = config.get("resort articles in categories", {})
+        conf.article_details = config.get("article details", {})
+        conf.article_details_rest = config.get("article details rest", {})
+        conf.unit_regex = r"(?!\d*\s?\%)(?:1⁄2|1⁄4|\d+),?\/?\.?\d*\s?g?\s?(?:ml.?)?(?:lt.?)?(?:d?kg ?)?(?:Kg ?)?(?:Pkg.?)?(?:pkg.?)?(?:Stk.?)?(?:stk.?)?"
+        conf.prefix_delimiter = "_"
 
-        dfs = tabula.read_pdf(price_list_input, lattice=True, pages='all', encoding='ISO-8859-15', pandas_options={'header': None})
+        dfs = tabula.read_pdf(price_list_input, lattice=True, pages='all', java_options="-Dfile.encoding=ISO-8859-1", encoding='ISO-8859-1', pandas_options={'header': None, "encoding":"ISO-8859-1"})
         raw_tables = [df.where(df.notnull(), None).values.tolist() for df in dfs]
         raw_tables.pop(0) # header table with information about the farm
-        split_tables = []
-        for raw_table in raw_tables:
-            if len(raw_table[0]) > 2:
-                split_tables.extend(self.split_table(raw_table))
-            else:
-                split_tables.append(raw_table)
-
-        tables = []
-        left_table = True
-        for split_table in split_tables:
-            if left_table:
-                tables.insert(int(split_tables.index(split_table)/2), split_table)
-                left_table = False
-            else:
-                tables.append(split_table)
-                left_table = True
+        table = raw_tables[0]
+        for raw_table in raw_tables[1:]:
+            table.extend(raw_table)
+        self.categories = []
+        category = None
+        for row in table:
+            if not row[0] and not row[2]:
+                continue
+            if row[0] and pandas.isna(row[1]) and pandas.isna(row[2]) and pandas.isna(row[3]):
+                if category:
+                    self.find_category_rows_in_table(table=table, category=category, row=row)
+                category = base.Category(name=row[0])
+                category.row_index = table.index(row)
+                category.raw_rows = []
+                self.categories.append(category)
+        self.find_category_rows_in_table(table=table, category=category)
+        
+        for category in self.categories:
+            subcategory = None
+            subcategories_rows = []
+            for row in category.raw_rows:
+                if subcategory and pandas.isna(row[1]):
+                    self.find_subcategory_rows(category_table=category.raw_rows, subcategory=subcategory, row=row)
+                    subcategories_rows.extend(subcategory.rows)
+                    subcategory = None
+                if row[0] and pandas.isna(row[1]) and row[0] not in conf.category_strings_to_ignore:
+                    subcategory = base.Category(name=row[0])
+                    subcategory.row_index = category.raw_rows.index(row)
+                    subcategory.rows = []
+                    category.subcategories.append(subcategory)
+            if subcategory:
+                self.find_subcategory_rows(category_table=category.raw_rows, subcategory=subcategory)
+            category.rows = [row for row in category.raw_rows if row not in subcategories_rows and not pandas.isna(row[0]) and not pandas.isna(row[1])]
 
         self.articles = []
-        self.categories = []
         self.ignored_categories = []
         self.ignored_articles = []
         self.notifications = []
-        current_category = None
-        pasta_column1 = "Weizen"
-        pasta_column2 = "Dinkel"
-        prefix_delimiter = "_"
-
-        for table in tables:
-            for row in table:
-                if not row[0]:
-                    if "vegan" in current_category.name.casefold() and len(self.categories) > 1:
-                        old_category_name = current_category.name
-                        schokolade_categories = [cat for cat in self.categories if "schokolade" in cat.name.casefold() and not "vegan" in cat.name.casefold()]
-                        if schokolade_categories:
-                            current_category = schokolade_categories[0]
-                            print(f"Springe von {old_category_name} zurück zu {current_category.name}")
-                        else:
-                            current_category = base.Category(name="Schokolade")
-                            self.ignored_categories.append(current_category)
-                else:
-                    raw_name = str(row[0])
-                    names = []
-                    price_contents = []
-                    if row[1]:
-                        price_contents = str(row[1]).replace(",", ".").split("\r")
-                    if re.search(r"\s\s\s\s\s\s\s\s\d,?\d\d", raw_name):
-                        rows = raw_name.split("\r")
-                        for row in rows:
-                            row_contents = row.split("        ")
-                            names.append(row_contents[0])
-                            price_contents.append(str(row_contents[-1]).replace(",", "."))
-                    elif len(price_contents) > 1:
-                        names = raw_name.split("\r")
-                    else:
-                        names = [raw_name]
-                    if (not row[1] or row[1] == "") and not price_contents and not raw_name in articles_without_price:
-                        if str(row[0]) in category_strings_to_ignore or len(str(row[0])) < 3:
-                            continue
-                        category = base.Category(name=str(row[0]))
-                        if base.equal_strings_check(list1=[category.name], list2=categories_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[category.name], list2=categories_to_ignore_containing, case_sensitive=False, strip=False):
-                            self.ignored_categories.append(category)
-                        else:
-                            if "GEMÜSE - " in category.name or "G EMÜSE - " in category.name:
-                                category.name = "Obst & Gemüse"
-                            self.categories.append(category)
-                        current_category = category
-                    else:
-                        if current_category in self.ignored_categories:
-                            continue
-                        prices = []
-                        for price_content in price_contents:
-                            try:
-                                prices.append(float(price_content.strip()))
-                            except ValueError:
-                                if "Dinkel" in price_content and "Nudel" in current_category.name:
-                                    pasta_column2 = "Dinkel"
-                                    pasta_column1 = raw_name.replace("Neue", "").strip()
-                                    names = []
-                                else:
-                                    print(f"Price could not be converted to float: {price_content.strip()}")
-                                continue
-                        if len(prices) > 1 and len(names) == 1:
-                            if "Nudel" in current_category.name:
-                                pasta_variation = names[0]
-                                names[0] = f"{pasta_column2} {pasta_variation}"
-                                names.append(f"{pasta_column1} {pasta_variation}")
-                            else:
-                                names = raw_name.split("\r")
-                        if len(prices) != len(names) and not raw_name in articles_without_price:
-                            print("Prices and names mismatch:")
-                            print(str(names))
-                            print(str(prices))
-                        else:
-                            for name in names:
-                                index = names.index(name)
-                                name = name.strip()
-                                unit = ""
-                                if prices:
-                                    price = prices[index]
-                                elif current_category.name == self.articles[-1].orig_category:
-                                    price = self.articles[-1].price_net
-                                    self.notifications.append(f"Kein Preis für '{name}' gefunden, verwende Preis des vorherigen Artikels der gleichen Kategorie ({self.articles[-1].name}, {'{:.2f}'.format(price)} €).")
-                                else:
-                                    price = None
-                                    self.notifications.append(f"Kein Preis für '{name}' gefunden, bitte Preis manuell ergänzen.")
-                                if re.match(r"^\d kg .*", name) or re.search(r"(?:Ab|ab) \d+ (?:kg|Stk)", name): # 5 kg Sack, Ab x Stk.
-                                    # TODO: option include_bulk_quantities_of_fresh_goods (only useful when Foodsoft supports quantity discount)
-                                    # for now we remove these discount articles
-                                    continue
-                                elif name == f"100 % echt Fl.": # Aroniasaft
-                                    if category_unit_regex_match := re.search(unit_regex, current_category.name):
-                                        unit = category_unit_regex_match.group(0)
-                                        current_category.name = current_category.name.replace(category_unit_regex_match.group(0), "")
-                                    name = f"{current_category.name} 100 %"
-                                for string in strings_to_remove_in_names:
-                                    remove_string = True
-                                    for string_to_keep in strings_to_keep_in_names:
-                                        if string in string_to_keep:
-                                            remove_string = False
-                                            break
-                                    if remove_string:
-                                        name = name.replace(string, "")
-                                for piece_unit_string in piece_unit_strings:
-                                    if name.casefold().endswith(piece_unit_string.casefold()):
-                                        unit = piece_unit_string
-                                        break
-                                if not unit:
-                                    for mispelled_unit in mispelled_units.keys():
-                                        if mispelled_unit in name:
-                                            unit = mispelled_units[mispelled_unit] # correct one
-                                            name = name.replace(mispelled_unit, "")
-                                            break
-                                    if not unit:
-                                        if unit_regex_match := re.search(unit_regex, name):
-                                            unit = unit_regex_match.group(0)
-                                        else:
-                                            for unit_string in other_unit_strings:
-                                                if unit_string.casefold() in name.casefold():
-                                                    unit = unit_string
-                                                    break
-                                name = name.replace(unit, "").strip()
-                                unit = unit.replace("bd", "Bund").replace("bund", "Bund").strip()
-                                if not unit:
-                                    if "topf" in name or "Topf" in name:
-                                        unit = "Stk"
-                                    elif category_unit_regex_match := re.search(unit_regex, current_category.name):
-                                        unit = category_unit_regex_match.group(0)
-                                        current_category.name.replace(unit, "").strip()
-                                    elif "sirup" in name.casefold():
-                                        unit = "0,75 lt" # Hollunderblütensirup not in Sirup category
-                                    elif current_category.name == self.articles[-1].orig_category:
-                                        unit = self.articles[-1].orig_unit
-                                        self.notifications.append(f"Keine Einheit für '{name}' gefunden, verwende Originaleinheit des vorherigen Artikels der gleichen Kategorie ({unit}).")
-                                    else:
-                                        unit = "Stk"
-                                        self.notifications.append(f"Keine Einheit für '{name}' gefunden, verwende Einheit {unit}.")
-                                if current_category.name == "Äpfel":
-                                    if apfel_matches := base.containing_strings_check([name], ["birne", "traube", "pfirsich", "nektarine", "quitte", "zwets"]):
-                                        current_category = next((c for c in self.categories if c.name == "Obst & Gemüse"))
-                                    else:
-                                        name = f"Äpfel {name}"
-                                while name.endswith(".") or name.endswith(","):
-                                    name = name[:-1].strip()
-                                while unit.endswith(".") or unit.endswith(","):
-                                    unit = unit[:-1].strip()
-                                if re.search(r"\d,\d+\s*ml", unit):
-                                    unrealistic_unit = unit
-                                    unit = unit.replace("ml", "lt")
-                                    self.notifications.append(f"Artikel '{name}' hat unrealistische Einheit {unrealistic_unit}, ersetze durch {unit}.")
-                                if price:
-                                    if price >= 100 and current_category.name == self.articles[-1].orig_category:
-                                        unrealistic_price = price
-                                        if "Nudel" in current_category.name:
-                                            current_category_articles = [a for a in self.articles if current_category.name == a.orig_category]
-                                            article_base_variation = name.split(" ")[0]
-                                            current_category_articles_with_same_base_variation = [a for a in current_category_articles if article_base_variation in a.name]
-                                            price = current_category_articles_with_same_base_variation[-1].price_net
-                                        else:
-                                            price = self.articles[-1].price_net
-                                        self.notifications.append(f"Artikel '{name}' hat unrealistischen Preis {str(unrealistic_price)} €, verwende Preis des vorherigen Artikels der gleichen Kategorie ({str(price)} €).")
-                                name = name[0].upper() + name[1:] # always capitalize first letter
-                                category_name = current_category.name
-                                if len(self.categories) == 1:
-                                    if "Eier" in name:
-                                        category_name = "Eier"
-                                    elif "wurst" in name:
-                                        category_name = "Wurst"
-                                    elif "chips" in name:
-                                        category_name = "Dörr-Obst"
-                                product_variant_names = [name]
-                                if product_variants_regex_match := re.search(r"(.*?)(\S*)\W+(?>oder|o\.)\W+(\S*)", name):
-                                    if len(product_variants_regex_match.groups()) == 3 and "Frischkäse" not in name:
-                                        product_variant_names = []
-                                        name = product_variants_regex_match.group(1).strip()
-                                        while name.endswith(".") or name.endswith(","):
-                                            name = name[:-1].strip()
-                                        for variant in product_variants_regex_match.groups()[1:]:
-                                            product_variant_names.append(f"{name} {variant}")
-                                elif "paprika" in name.casefold() and category_name == "Obst & Gemüse":
-                                    variants = name.casefold().replace("(hell)grün", "hellgrün, grün").split(",")
-                                    if variants:
-                                        product_variant_names = []
-                                        name = " ".join(variants[0].split(" ")[:-1])
-                                        variants[0] = variants[0].replace(name, "")
-                                        name = name[0].upper() + name[1:]
-                                        for variant in variants:
-                                            variant_name = variant.strip()
-                                            if variant_name:
-                                                product_variant_names.append(f"{name} {variant_name}")
-                                elif "schokolade" in current_category.name.casefold():
-                                    if base.containing_strings_check(list1=[name], list2=["Kiwi", "Kräuterseitlinge", "Champignons", "Champions", "Apfelessig"]):
-                                        current_category = base.Category(name="Diverses")
-                                        self.categories.append(current_category)
-                                    else:
-                                        product_variant_names = []
-                                        name = name.replace("Versch.Sorten:", "").replace("usw", "").strip()
-                                        chocolate_variants = name.split(",")
-                                        # if len(chocolate_variants) == 1 and "\r" in chocolate_variants[0]:
-                                        #     chocolate_variants = chocolate_variants[0].split("\r")
-                                        for variant in chocolate_variants:
-                                            variant = variant.replace("\r", " ").replace("- ", "-").strip()
-                                            while variant.startswith(".") and len(variant) > 1:
-                                                variant = variant[1:]
-                                            variant = variant.strip()
-                                            if variant:
-                                                if not base.containing_strings_check(list1=[variant], list2=["schoko", "nougat", "trüffel"]):
-                                                    variant = f"{variant}-Schokolade"
-                                                if "vegan" in current_category.name.casefold() and not "vollmilch" in variant.casefold() and not "joghurt" in variant.casefold():
-                                                    variant = f"{variant} vegan"
-                                                product_variant_names.append(variant)
-                                elif "honig" in current_category.name.casefold():
-                                    name_parts = name.split("(")
-                                    if len(name_parts) == 2:
-                                        variants_part = name_parts[-1]
-                                        variants_part = variants_part.replace(")", "")
-                                        variants = variants_part.split(",")
-                                        if variants:
-                                            product_variant_names = []
-                                        for variant in variants:
-                                            variant = variant.strip()
-                                            if "oststeir" in name.casefold() and "honig" in name.casefold():
-                                                variant = f"Oststeirischer {variant}honig"
-                                            elif "biohonig" in name.casefold():
-                                                variant = f"Bio-{variant}honig"
-                                            product_variant_names.append(variant)
-
-                                name = name.replace("\r", " ")
-
-                                # match categories
-                                target_category_name = foodsoft_article_import.resort_articles_in_categories(article_name=name, category_name=category_name, resort_articles_in_categories=resort_articles_in_categories)
-
-                                # add article origin and manufacturer information via config
-                                origin = ""
-                                manufacturer = ""
-                                article_details_found = False
-                                for article_detail_category in article_details:
-                                    exact = article_details[article_detail_category].get("exact")
-                                    case_sensitive = article_details[article_detail_category].get("case-sensitive")
-                                    if exact:
-                                        if base.equal_strings_check(list1=[current_category.name, category_name, target_category_name], list2=article_details[article_detail_category].get("categories", []), case_sensitive=case_sensitive) or base.equal_strings_check(list1=[name], list2=article_details[article_detail_category].get("articles", []), case_sensitive=case_sensitive):
-                                            origin = article_details[article_detail_category].get("origin", "")
-                                            manufacturer = article_details[article_detail_category].get("manufacturer", "")
-                                            article_details_found = True
-                                            break
-                                    else:
-                                        if base.containing_strings_check(list1=[current_category.name, category_name, target_category_name], list2=article_details[article_detail_category].get("categories", []), case_sensitive=case_sensitive) or base.containing_strings_check(list1=[name], list2=article_details[article_detail_category].get("articles", []), case_sensitive=case_sensitive):
-                                            origin = article_details[article_detail_category].get("origin", "")
-                                            manufacturer = article_details[article_detail_category].get("manufacturer", "")
-                                            article_details_found = True
-                                            break
-                                if not article_details_found and article_details_rest:
-                                    origin = article_details_rest.get("origin", "")
-                                    manufacturer = article_details_rest.get("manufacturer", "")
-
-                                for product_variant in product_variant_names:
-                                    product_variant = product_variant.replace("\r", " ")
-                                    article = foodsoft_article.Article(order_number="", name=product_variant, unit=unit, price_net=price, vat=discount_percentage*-1, category=target_category_name, origin=origin, manufacturer=manufacturer, orig_unit=unit, orig_category=category_name)
-                                    if base.equal_strings_check(list1=[name], list2=articles_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[name], list2=articles_to_ignore_containing, case_sensitive=False, strip=False):
-                                        self.ignored_articles.append(article)
-                                    else:
-                                        if unit in ["1kg", "1 kg", "kg"]: # convert to piece unit
-                                            converted_to_piece_article = False
-                                            for piece_unit_category in piece_articles_exact:
-                                                if base.equal_strings_check(list1=[current_category.name, category_name, target_category_name], list2=piece_articles_exact[piece_unit_category].get("categories")):
-                                                    piece_units = piece_articles_exact[piece_unit_category].get("piece units")
-                                                    matching_piece_articles = base.equal_strings_check(list1=[name], list2=[str(entry) for entry in piece_units.keys()], case_sensitive=True, strip=False)
-                                                    if matching_piece_articles:
-                                                        article = self.convert_to_piece_article(article=article, conversion=piece_units[matching_piece_articles[0]])
-                                                        converted_to_piece_article = True
-                                                        break
-                                            if not converted_to_piece_article:
-                                                for piece_unit_category in piece_articles_containing:
-                                                    if base.equal_strings_check(list1=[current_category.name, category_name, target_category_name], list2=piece_articles_containing[piece_unit_category].get("categories")):
-                                                        piece_units = piece_articles_containing[piece_unit_category].get("piece units")
-                                                        matching_piece_articles = base.containing_strings_check(list1=[name], list2=[str(entry) for entry in piece_units.keys()], case_sensitive=False, strip=False)
-                                                        if matching_piece_articles:
-                                                            article = self.convert_to_piece_article(article=article, conversion=piece_units[matching_piece_articles[0]])
-                                                            converted_to_piece_article = True
-                                                            break
-
-                                        articles = foodsoft_article_import.recalculate_unit_for_article(article=article, category_names=[category_name, target_category_name], recalculate_units=recalculate_units) # convert to e.g. 500g unit (multiple units possible)
-                                        for a in articles:
-                                            a.order_number = f"{str(self.categories.index(current_category)).zfill(2)}{prefix_delimiter}{product_variant}_{a.unit}"
-                                            self.articles.append(a)
+                
+        for category in self.categories:
+            if base.equal_strings_check(list1=[category.name], list2=conf.categories_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[category.name], list2=conf.categories_to_ignore_containing, case_sensitive=False, strip=False):
+                self.ignored_categories.append(category)
+                continue
+            for row in category.rows:
+                self.handle_article_row(category=category, row=row, config=conf)
+            for subcategory in category.subcategories:
+                if base.equal_strings_check(list1=[subcategory.name], list2=conf.categories_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[subcategory.name], list2=conf.categories_to_ignore_containing, case_sensitive=False, strip=False):
+                    self.ignored_categories.append(subcategory)
+                    continue
+                for row in subcategory.rows:
+                    self.handle_article_row(category=category, row=row, subcategory=subcategory, config=conf)
 
         self.articles, self.notifications = foodsoft_article_import.rename_duplicates(locales=session.locales, articles=self.articles, notifications=self.notifications, compare_unit=True, keep_full_duplicates=False)
         self.articles, self.notifications = foodsoft_article_import.rename_duplicate_order_numbers(locales=session.locales, articles=self.articles, notifications=self.notifications)
-        articles_from_foodsoft, self.notifications = foodsoft_article_import.get_articles_from_foodsoft(locales=session.locales, supplier_id=supplier_id, foodsoft_connector=session.foodsoft_connector, prefix_delimiter=prefix_delimiter, notifications=self.notifications)
-        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(locales=session.locales, foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, prefix_delimiter=prefix_delimiter, notifications=self.notifications)
+        articles_from_foodsoft, self.notifications = foodsoft_article_import.get_articles_from_foodsoft(locales=session.locales, supplier_id=supplier_id, foodsoft_connector=session.foodsoft_connector, prefix_delimiter=conf.prefix_delimiter, notifications=self.notifications)
+        self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(locales=session.locales, foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, prefix_delimiter=conf.prefix_delimiter, notifications=self.notifications)
         self.notifications = foodsoft_article_import.write_articles_csv(locales=session.locales, file_path=base.file_path(path=self.path, folder="download", file_name=self.configuration + "_Artikel_" + self.name), articles=self.articles, notifications=self.notifications)
         message_prefix = config.get("message prefix", "")
         message = foodsoft_article_import.compose_articles_csv_message(locales=session.locales, supplier=self.configuration, foodsoft_url=session.settings.get('foodsoft_url'), supplier_id=supplier_id, categories=self.categories, ignored_categories=self.ignored_categories, ignored_articles=self.ignored_articles, notifications=self.notifications, prefix=message_prefix)
@@ -400,6 +149,204 @@ class ScriptRun(base.Run):
         self.next_possible_methods = []
         self.completion_percentage = 100
         self.log.append(base.LogEntry(action="marked as imported", done_by=base.full_user_name(session)))
+
+    def handle_article_row(self, config, category, row, subcategory=None):
+        name = str(row[0]).strip()
+        price = None
+        if row[1]:
+            price_content = str(row[1]).replace(",", ".").strip()
+            try:
+                price = float(price_content)
+            except ValueError:
+                print(f"Price could not be converted to float: {price_content.strip()}")
+        elif category.name == self.articles[-1].orig_category:
+            price = self.articles[-1].price_net
+            self.notifications.append(f"Kein Preis für '{name}' gefunden, verwende Preis des vorherigen Artikels der gleichen Kategorie ({self.articles[-1].name}, {'{:.2f}'.format(price)} €).")
+        else:
+            self.notifications.append(f"Kein Preis für '{name}' gefunden, bitte Preis manuell ergänzen.")
+        
+        if not re.match(r"^\d kg .*", name) and not re.search(r"(?:Ab|ab) \d+ ?(?:kg|Stk)", name) and not "sack" in name.casefold(): # 5 kg Sack, Ab x Stk.
+            # TODO: option include_bulk_quantities_of_fresh_goods (only useful when Foodsoft supports quantity discount)
+            # for now we remove these discount articles
+            
+            for string in config.strings_to_remove_in_names:
+                remove_string = True
+                for string_to_keep in config.strings_to_keep_in_names:
+                    if string in string_to_keep:
+                        remove_string = False
+                        break
+                if remove_string:
+                    name = name.replace(string, "")
+            unit = ""
+            for piece_unit_string in config.piece_unit_strings:
+                if name.casefold().endswith(piece_unit_string.casefold()):
+                    unit = piece_unit_string
+                    break
+            if not unit:
+                for mispelled_unit in config.mispelled_units.keys():
+                    if mispelled_unit in name:
+                        unit = config.mispelled_units[mispelled_unit] # correct one
+                        name = name.replace(mispelled_unit, "")
+                        break
+                if not unit:
+                    if unit_regex_match := re.search(config.unit_regex, name):
+                        unit = unit_regex_match.group(0)
+                    else:
+                        for unit_string in config.other_unit_strings:
+                            if unit_string.casefold() in name.casefold():
+                                unit = unit_string
+                                break
+            name = re.sub(unit, "", name, flags=re.IGNORECASE).strip().replace("\r", " ")
+            unit = unit.replace("bd", "Bund").replace("bund", "Bund").strip()
+            if not unit:
+                if "topf" in name or "Topf" in name:
+                    unit = "Stk"
+                elif category_unit_regex_match := re.search(config.unit_regex, category.name):
+                    unit = category_unit_regex_match.group(0)
+                    category.name.replace(unit, "").strip()
+                elif category.name == self.articles[-1].orig_category:
+                    unit = self.articles[-1].orig_unit
+                    self.notifications.append(f"Keine Einheit für '{name}' gefunden, verwende Originaleinheit des vorherigen Artikels der gleichen Kategorie ({unit}).")
+                else:
+                    unit = "Stk"
+                    self.notifications.append(f"Keine Einheit für '{name}' gefunden, verwende Einheit {unit}.")
+            
+            while name.endswith(".") or name.endswith(","):
+                name = name[:-1].strip()
+            while unit.endswith(".") or unit.endswith(","):
+                unit = unit[:-1].strip()
+            if re.search(r"\d,\d+\s*ml", unit):
+                unrealistic_unit = unit
+                unit = unit.replace("ml", "lt")
+                self.notifications.append(f"Artikel '{name}' hat unrealistische Einheit {unrealistic_unit}, ersetze durch {unit}.")
+
+            if price:
+                if price >= 100 and category.name == self.articles[-1].orig_category:
+                    unrealistic_price = price
+                    price = self.articles[-1].price_net
+                    self.notifications.append(f"Artikel '{name}' hat unrealistischen Preis {str(unrealistic_price)} €, verwende Preis des vorherigen Artikels der gleichen Kategorie ({str(price)} €).")
+            name = name[0].upper() + name[1:] # always capitalize first letter
+            category_name = category.name
+            if "Eier" in name:
+                category_name = "Eier"
+            elif "wurst" in name:
+                category_name = "Wurst"
+            elif "chips" in name:
+                category_name = "Dörr-Obst"
+            product_variant_names = [name]
+            if product_variants_regex_match := re.search(r"(.*?)(\S*)\W+(?>oder|o\.|u\.)\W*(\S*)", name):
+                if len(product_variants_regex_match.groups()) == 3 and "Frischkäse" not in name:
+                    product_variant_names = []
+                    name = product_variants_regex_match.group(1).strip()
+                    while name.endswith(".") or name.endswith(","):
+                        name = name[:-1].strip()
+                    for variant in product_variants_regex_match.groups()[1:]:
+                        product_variant_names.append(f"{name} {variant}")
+            elif "paprika" in name.casefold() and category_name == "Gemüse":
+                variants = name.casefold().replace("(hell)grün", "hellgrün, grün").split(",")
+                if variants:
+                    product_variant_names = []
+                    name = " ".join(variants[0].split(" ")[:-1])
+                    variants[0] = variants[0].replace(name, "")
+                    if len(name) > 1:
+                        name = name[0].upper() + name[1:]
+                    for variant in variants:
+                        variant_name = variant.strip()
+                        if variant_name:
+                            product_variant_names.append(f"{name} {variant_name}")
+            elif "honig" in category.name.casefold():
+                name_parts = name.split("onig")
+                print("Original: " + name)
+                if len(name_parts) > 1:
+                    variants_part = name_parts[-1]
+                    variants_part = variants_part.replace(")", "").replace("(", "").replace(".", "").replace(",", "").strip()
+                    variants_part = base.remove_double_strings_loop(variants_part, " ")
+                    variants = variants_part.split(' ')
+                    if variants:
+                        product_variant_names = []
+                    for variant in variants:
+                        variant = f"{variant.strip()}honig"
+                        if "biohonig" in name.casefold():
+                            variant = f"Bio-{variant}"
+                        if "oststeir" in name.casefold():
+                            variant = f"Oststeirischer {variant}"
+                        product_variant_names.append(variant)
+                        print("variant: " + variant)
+
+            # match categories
+            target_category_name = foodsoft_article_import.resort_articles_in_categories(article_name=name, category_name=category_name, resort_articles_in_categories=config.resort_articles_in_categories)
+
+            # add article origin and manufacturer information via config
+            origin = ""
+            manufacturer = ""
+            article_details_found = False
+            for article_detail_category in config.article_details:
+                exact = config.article_details[article_detail_category].get("exact")
+                case_sensitive = config.article_details[article_detail_category].get("case-sensitive")
+                if exact:
+                    if base.equal_strings_check(list1=[category.name, category_name, target_category_name], list2=config.article_details[article_detail_category].get("categories", []), case_sensitive=case_sensitive) or base.equal_strings_check(list1=[name], list2=config.article_details[article_detail_category].get("articles", []), case_sensitive=case_sensitive):
+                        origin = config.article_details[article_detail_category].get("origin", "")
+                        manufacturer = config.article_details[article_detail_category].get("manufacturer", "")
+                        article_details_found = True
+                        break
+                else:
+                    if base.containing_strings_check(list1=[category.name, category_name, target_category_name], list2=config.article_details[article_detail_category].get("categories", []), case_sensitive=case_sensitive) or base.containing_strings_check(list1=[name], list2=config.article_details[article_detail_category].get("articles", []), case_sensitive=case_sensitive):
+                        origin = config.article_details[article_detail_category].get("origin", "")
+                        manufacturer = config.article_details[article_detail_category].get("manufacturer", "")
+                        article_details_found = True
+                        break
+            if not article_details_found and config.article_details_rest:
+                origin = config.article_details_rest.get("origin", "")
+                manufacturer = config.article_details_rest.get("manufacturer", "")
+
+            for product_variant in product_variant_names:
+                product_variant = product_variant.replace("\r", " ")
+                article = foodsoft_article.Article(order_number="", name=product_variant, unit=unit, price_net=price, vat=config.discount_percentage*-1, category=target_category_name, origin=origin, manufacturer=manufacturer, orig_unit=unit, orig_category=category_name)
+                if base.equal_strings_check(list1=[name], list2=config.articles_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[name], list2=config.articles_to_ignore_containing, case_sensitive=False, strip=False):
+                    self.ignored_articles.append(article)
+                else:
+                    if unit in ["1kg", "1 kg", "kg"]: # convert to piece unit
+                        converted_to_piece_article = False
+                        for piece_unit_category in config.piece_articles_exact:
+                            if base.equal_strings_check(list1=[category.name, category_name, target_category_name], list2=config.piece_articles_exact[piece_unit_category].get("categories")):
+                                piece_units = config.piece_articles_exact[piece_unit_category].get("piece units")
+                                matching_piece_articles = base.equal_strings_check(list1=[name], list2=[str(entry) for entry in piece_units.keys()], case_sensitive=True, strip=False)
+                                if matching_piece_articles:
+                                    article = self.convert_to_piece_article(article=article, conversion=piece_units[matching_piece_articles[0]])
+                                    converted_to_piece_article = True
+                                    break
+                        if not converted_to_piece_article:
+                            for piece_unit_category in config.piece_articles_containing:
+                                if base.equal_strings_check(list1=[category.name, category_name, target_category_name], list2=config.piece_articles_containing[piece_unit_category].get("categories")):
+                                    piece_units = config.piece_articles_containing[piece_unit_category].get("piece units")
+                                    matching_piece_articles = base.containing_strings_check(list1=[name], list2=[str(entry) for entry in piece_units.keys()], case_sensitive=False, strip=False)
+                                    if matching_piece_articles:
+                                        article = self.convert_to_piece_article(article=article, conversion=piece_units[matching_piece_articles[0]])
+                                        converted_to_piece_article = True
+                                        break
+
+                    articles = foodsoft_article_import.recalculate_unit_for_article(article=article, category_names=[category_name, target_category_name], recalculate_units=config.recalculate_units) # convert to e.g. 500g unit (multiple units possible)
+                    for a in articles:
+                        a.order_number = f"{str(self.categories.index(category)).zfill(2)}{config.prefix_delimiter}{product_variant}_{a.unit}"
+                        self.articles.append(a)
+
+    def find_category_rows_in_table(self, table, category, row=None):
+        left_rows = []
+        right_rows = []
+        for raw_row in self.find_raw_category_rows(table, category, row):
+            left_rows.append(raw_row[0:2])
+            right_rows.append(raw_row[2:])
+        category.raw_rows = left_rows + [[None, None]] + right_rows
+
+    def find_raw_category_rows(self, table, category, row=None):
+        if row:
+            upper_index = table.index(row)
+        else:
+            upper_index = -1
+        return table[category.row_index + 1 : upper_index]
+    
+    def find_subcategory_rows(self, category_table, subcategory, row=None):
+        subcategory.rows = self.find_raw_category_rows(table=category_table, category=subcategory, row=row)
 
     def convert_to_piece_article(self, article, conversion):
         article.name += f" ({foodsoft_article_import.base_price_str(article_price=article.price_net, base_unit=article.unit, vat=article.vat)})"
@@ -422,3 +369,6 @@ class ScriptRun(base.Run):
                     print(f"Right row contains still more than 2 columns: {str(right_row)}")
             tables[1].append(right_row)
         return tables
+
+class Config():
+    pass

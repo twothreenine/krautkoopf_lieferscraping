@@ -19,6 +19,20 @@ import script_libs.generic.foodsoft_article as foodsoft_article
 
 logging.basicConfig() # level=logging.DEBUG
 
+class Ordergroup:
+    def __init__(self, id, details):
+        self.id = id
+        self.name = details.get("name")
+
+class User:
+    def __init__(self, id, details, message_link=None):
+        self.id = id
+        self.nick = details.get("nick")
+        self.name = details.get("name")
+        self.e_mail = details.get("email")
+        self.phone_number = details.get("phone")
+        self.message_link = message_link
+
 class Supplier:
     def __init__(self, no, name, address="", website="", origin="", category="", additional_fields=None, deleted=False, latitude=None, longitude=None, icon=None, icon_prefix=None, icon_color=None):
         self.no = no # ID from Foodsoft
@@ -285,7 +299,7 @@ class FSConnector:
             price_net = float(columns[5].text.replace(",", ".").replace("€", "").strip())
             vat = float(columns[6].text.replace(",", ".").replace("%", "").strip())
             supplier_id = columns[7].find("a").get("href").split("/")[-1]
-            supplier = next((s for s in suppliers if s.no == supplier_id))
+            supplier = next((s for s in suppliers if s.no == supplier_id), None)
             if not supplier:
                 supplier = self.get_data_of_supplier(supplier_id=supplier_id, name_fields=name_fields, origin_fields=origin_fields, address_fields=address_fields, website_fields=website_fields, category_fields=category_fields, additional_fields=additional_fields)
                 if supplier:
@@ -317,3 +331,68 @@ class FSConnector:
                 category.keywords = [kw.strip() for kw in description.split(",")]
             article_categories.append(category)
         return article_categories
+    
+    def get_user_data(self):
+        # Returns a list of all users (as User objects) containing their data
+        users = []
+        page = 1
+        while page:
+            userlist_url = f"{self._url}foodcoop/users?page={str(page)}&per_page=500"
+            parsed_html = bs(self._get(userlist_url, self._default_header).content, 'html.parser')
+            users_div = parsed_html.body.find("div", id="users")
+            table_head = users_div.find("thead").find("tr").find_all("th")
+            head_columns = list()
+            for head_column in table_head:
+                if head_column.find("a"):
+                    head_columns.append(head_column.find("a").get("href").split("sort=")[1])
+            rows = users_div.find("tbody").find_all("tr")
+            for row in rows:
+                columns = row.find_all("td")
+                link = columns[-1].find("a").get("href")
+                user_id = int(link.split("=")[-1])
+                message_link = self._url + "/".join(link.split("/")[2:])
+                details = {c: columns[head_columns.index(c)].text.strip().replace("  ", " ") for c in head_columns}
+                users.append(User(id=user_id, details=details, message_link=message_link))
+            pagination = parsed_html.body.find("div", id="users").find(class_="pagination")
+            if pagination:
+                next_page = pagination.find(class_="next_page")
+                if next_page:
+                    page += 1
+                else:
+                    page = None
+            else:
+                page = None
+
+        return users
+    
+    def get_ordergroup_data(self):
+        # Returns a list of all ordergroups (as Ordergroup objects) containing their data
+        ordergroups = []
+        page = 1
+        while page:
+            ordergroup_list_url = f"{self._url}foodcoop/ordergroups?page={str(page)}&per_page=500"
+            parsed_html = bs(self._get(ordergroup_list_url, self._default_header).content, 'html.parser')
+            ordergroups_div = parsed_html.body.find("div", id="ordergroups")
+            table_head = ordergroups_div.find("thead").find("tr").find_all("th")
+            head_columns = list()
+            for head_column in table_head:
+                if head_column.find("a"):
+                    head_columns.append(head_column.find("a").get("href").split("sort=")[1])
+            rows = ordergroups_div.find("tbody").find_all("tr")
+            for row in rows:
+                columns = row.find_all("td")
+                link = columns[-1].find("a").get("href")
+                ordergroup_id = int(link.split("=")[-1])
+                details = {c: columns[head_columns.index(c)].text.strip().replace("  ", " ") for c in head_columns}
+                ordergroups.append(User(id=ordergroup_id, details=details))
+            pagination = parsed_html.body.find("div", id="ordergroups").find(class_="pagination")
+            if pagination:
+                next_page = pagination.find(class_="next_page")
+                if next_page:
+                    page += 1
+                else:
+                    page = None
+            else:
+                page = None
+
+        return ordergroups

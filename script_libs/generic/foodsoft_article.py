@@ -5,12 +5,21 @@ import base
 class Article:
     def __init__(self, order_number, name, unit, price_net, available=True, note="", manufacturer="", origin="", vat=0, deposit=0, unit_quantity=1, category="", ignore=False, orig_unit="", version=1, **kwargs):
         self.available = available
-        self.order_number = order_number
+        self.order_number = str(order_number)
         self.name = str(name)
-        self.note = note
-        self.manufacturer = manufacturer
-        self.origin = origin
         self.unit = str(unit)
+        if note:
+            self.note = note
+        else:
+            self.note = ""
+        if manufacturer:
+            self.manufacturer = manufacturer
+        else:
+            self.manufacturer = ""
+        if origin:
+            self.origin = origin
+        else:
+            self.origin = ""
         if price_net:
             self.price_net = float(price_net)
         else:
@@ -27,7 +36,10 @@ class Article:
             self.unit_quantity = int(unit_quantity)
         else:
             self.unit_quantity = 1
-        self.category = category
+        if category:
+            self.category = category
+        else:
+            self.category = ""
         self.ignore = ignore # if True, the article will not be imported
         self.orig_unit = orig_unit # Short form of article's unit, used for distinguishing duplicates, not loaded into Foodsoft
         self.version = version # number of article version
@@ -71,7 +83,7 @@ class Article:
         match unit.casefold():
             case "kg":
                 unit = "kg"
-            case "l" | "lt":
+            case "l" | "lt" | "lit.":
                 unit = "l"
             case "g" | "gr":
                 amount /= 1000
@@ -146,9 +158,9 @@ def read_articles_from_csv(csv, version_delimiter=None, prefix_delimiter=None, s
             order_number = row[1]
             version = 1
             if version_delimiter:
-                order_number_strings = order_number.split(version_delimiter)
+                order_number_strings = [el for el in re.split(f"(.*)(?>{version_delimiter})(\d+)", order_number) if el]
                 if len(order_number_strings) > 1:
-                    order_number = version_delimiter.join(order_number_strings[:-1])
+                    order_number = version_delimiter.join(order_number_strings[:-1]) # TODO: unnecessary?! should be the same as before?
                     version = int(order_number_strings[-1])
             if prefix_delimiter:
                 order_number_strings = order_number.split(prefix_delimiter)

@@ -1,0 +1,48 @@
+# variables
+Foodsoft supplier ID:
+    name: "ID von Lieferant*in in Foodsoft"
+message prefix:
+    name: "Text, der der Zusammenfassung vorangestellt wird"
+ignore categories by name (exact, case-sensitive):
+    name: Ignoriere Kategorien per Name (exakt, Groß-/Kleinschreibung-unterscheidend)
+ignore categories by name (containing, case-insensitive):
+    name: Ignoriere Kategorien per Name (enthaltend, schreibungsunabhängig)
+    description: in Kleinbuchstaben eintragen
+ignore articles by name (exact, case-sensitive):
+    name: Ignoriere Artikel per Name (exakt, Groß-/Kleinschreibung-unterscheidend)
+ignore articles by name (containing, case-insensitive):
+    name: Ignoriere Artikel per Name (enthaltend, schreibungsunabhängig)
+    description: in Kleinbuchstaben eintragen
+strings to replace in article name:
+    name: Zeichenfolgen, die im Artikelnamen ersetzt werden sollen
+
+# log
+price list converted: Preisliste umgewandelt
+price list saved: Preisliste gespeichert
+availability list applied: Verfügbarkeitsliste angewandt
+marked as imported: als hochgeladen markiert
+
+# methods
+convert_price_list:
+    name: "Preisliste umwandeln"
+    description: "Hiermit wird die Preisliste eingelesen. Nur nötig, wenn es eine neue Preisliste gibt (jährlich?)."
+save_price_list:
+    name: "Preisliste speichern"
+    description: "Hiermit wird die eingelesene Preisliste in der Konfiguration gespeichert. Überprüfe die CSV, bevor du fortfährst."
+apply_availability_list:
+    name: "Verfügbarkeitsliste anwenden"
+    description: "Hiermit wird die wöchentliche Verfügbarkeitsliste mit der gespeicherten Preisliste abgeglichen und eine CSV mit den aktuellen Artikeln erstellt."
+mark_as_imported:
+    name: "Als hochgeladen markieren"
+    description: "Hiermit wird diese CSV als zuletzt hochgeladene Artikelliste markiert. Dies ist wichtig beim nächsten Auslesen, damit manuelle Änderungen in der Foodsoft beim Import bzw. danach erkannt werden können. Wenn die Datei nicht hochgeladen wird, diesen Schritt also auslassen!"
+select_matching_articles:
+    name: "Passende Artikel verknüpfen"
+    description: "Ordne jeweils den passenden Preislisten-Artikel zu dem in Klammern angegebenen zu."
+
+# inputs
+price_list_input:
+    name: Preisliste
+    description: "hier die .xlsx-Datei hereinziehen oder auswählen"
+availability_list_input:
+    name: Verfügbarkeitsliste
+    description: hier die Liste aus der WhatsApp-Nachricht einfügen

@@ -17,6 +17,8 @@ import requests
 import tabula
 from subprocess import CalledProcessError
 
+import json
+
 import base
 import script_libs.generic.foodsoft_article as foodsoft_article
 import script_libs.generic.foodsoft_article_import as foodsoft_article_import
@@ -58,16 +60,18 @@ class ScriptRun(base.Run):
         self.notifications = [] # notes for the run's info message
         vat_collection = vat.VatCollection()
         recipient_vat = vat_collection.find_matching_country(config.get("country of destination"))
-        original_vat = vat_collection.find_matching_country("de")
         self.recipient_vat_reduced = recipient_vat.get_reduced()
         self.recipient_vat_standard = recipient_vat.get_standard()
-        self.original_vat_reduced = original_vat.get_reduced()
-        self.original_vat_standard = original_vat.get_standard()
 
         self.start_driver()
 
         if email and password:
+            self.driver.get("https://b2b.fairfood.bio/account/login")
+            time.sleep(1)
+            self.accept_cookies()
+            time.sleep(1)
             self.login(email=email, password=password)
+            time.sleep(1)
             self.read_shop(b2b=True)
 
         if not self.read_B2B_shop_only:
@@ -89,7 +93,7 @@ class ScriptRun(base.Run):
                     content_grm = offer.content_grm
                     offers_of_same_amount = sorted([o for o in offers if o.content_grm == content_grm], key=lambda x: x.gross_price)
                     if offer == offers_of_same_amount[0]:
-                        unit, price_net, unit_quantity = offer.fs_unit(self.exclude_categories_from_loose_orders)
+                        unit, price_net, unit_quantity = offer.fs_unit(exclude_categories_from_loose_orders=self.exclude_categories_from_loose_orders, recipient_vat_standard=self.recipient_vat_standard, recipient_vat_reduced=self.recipient_vat_reduced)
                         base_price = offer.gross_kgm_price
                         offer_name = offer.name
                         if base_price:
@@ -103,7 +107,6 @@ class ScriptRun(base.Run):
                         if loose_offers_count > 0: # only import smallest loose offer per product
                             break
 
-        self.articles, self.notifications = foodsoft_article_import.rename_duplicates(locales=session.locales, articles=self.articles, notifications=self.notifications)
         self.driver.quit()
         self.driver = None
 
@@ -114,6 +117,10 @@ class ScriptRun(base.Run):
     def generate_csv(self, session):
         config = base.read_config(self.foodcoop, self.configuration)
         version_delimiter = "_v"
+        
+        self.articles, self.notifications = foodsoft_article_import.remove_articles_with_duplicate_order_numbers(locales=session.locales, articles=self.articles, notifications=self.notifications)
+        self.articles, self.notifications = foodsoft_article_import.rename_duplicates(locales=session.locales, articles=self.articles, notifications=self.notifications)
+
         articles_from_foodsoft, self.notifications = foodsoft_article_import.get_articles_from_foodsoft(locales=session.locales, supplier_id=self.supplier_id, foodsoft_connector=session.foodsoft_connector, notifications=self.notifications, version_delimiter=version_delimiter)
         self.articles, self.notifications = foodsoft_article_import.compare_manual_changes(locales=session.locales, foodcoop=self.foodcoop, supplier=self.configuration, articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, version_delimiter=version_delimiter, notifications=self.notifications)
         self.articles = foodsoft_article_import.version_articles(articles=self.articles, articles_from_foodsoft=articles_from_foodsoft, version_delimiter=version_delimiter, compare_name=False)
@@ -131,7 +138,7 @@ class ScriptRun(base.Run):
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name="Zusammenfassung"), content=message)
 
         self.log.append(base.LogEntry(action="CSV generated", done_by=base.full_user_name(session)))
-        self.next_possible_methods = [mark_as_imported]
+        self.next_possible_methods = [mark_as_imported, generate_csv]
         self.completion_percentage = 67
 
     def mark_as_imported(self, session):
@@ -155,9 +162,11 @@ class ScriptRun(base.Run):
 
         if order_articles:
             if email and password:
-                self.login(email=email, password=password)
+                self.driver.get("https://b2b.fairfood.bio/account/login")
                 time.sleep(1)
                 self.accept_cookies()
+                time.sleep(1)
+                self.login(email=email, password=password)
                 time.sleep(1)
             for oa in order_articles:
                 order_number_strings = oa.order_number.split("_")
@@ -247,19 +256,17 @@ class ScriptRun(base.Run):
         self.driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()))
 
     def login(self, email, password):
-        self.driver.get("https://b2b.fairfood.bio/account/login")
-        time.sleep(1)
         self.driver.find_element(By.ID, "loginMail").send_keys(email)
         self.driver.find_element(By.ID, "loginPassword").send_keys(password)
         login_button = self.driver.find_element(By.XPATH, "//div[@class='login-submit']/button")
         login_button.click()
-        time.sleep(1)
 
     def accept_cookies(self):
         try:
-            accept_cookies = self.driver.find_element(By.XPATH, "//span[@class='js-cookie-accept-all-button']/button")
+            accept_cookies = self.driver.find_element(By.XPATH, "//button[@class='btn btn-primary btn-block js-offcanvas-cookie-accept-all']")
         except NoSuchElementException:
             accept_cookies = None
+            print("Cookie button not found")
         if accept_cookies:
             accept_cookies.click()
 
@@ -272,8 +279,9 @@ class ScriptRun(base.Run):
             self.driver.get(f"https://fairfood.bio")
             time.sleep(1)
         self.accept_cookies()
-        category_links = BeautifulSoup(self.driver.page_source, features="html.parser").body.find(class_="nav main-navigation-menu").find_all("a")
-        for cl in category_links:
+        category_items = BeautifulSoup(self.driver.page_source, features="html.parser").body.find(class_="navbar-nav main-navigation-menu-list flex-wrap").find_all("li")
+        for category_item in category_items:
+            cl = category_item.find("a")
             current_category = None
             category_name = cl.get("title")
             for c in self.categories:
@@ -293,7 +301,7 @@ class ScriptRun(base.Run):
                 page += 1
                 self.driver.get(f"{cl.get('href')}?p={str(page)}")
                 time.sleep(1)
-                product_links = [p.get_attribute('href') for p in self.driver.find_elements(By.XPATH, "//a[@class='product-name']")]
+                product_links = [p.get_attribute('href') for p in self.driver.find_elements(By.XPATH, "//a[@class='product-name stretched-link']")]
                 if not product_links:
                     products_found = False
                 for product_link in product_links:
@@ -303,13 +311,17 @@ class ScriptRun(base.Run):
                     # self.driver.find_element(By.XPATH, "//div[@class='product-detail-configurator-option']/label").click() # go to first product option
                     # next_option = self.driver.find_element(By.XPATH, "//input[@class='product-detail-configurator-option-input is-combinable'][@checked='checked']/../following-sibling::div/label")
                     # next_option.click() # put this in a while next_option loop with try-except NoSuchElementException: break
-                    try:
-                        parent_id = self.driver.find_element(By.XPATH, "//input[@name='parentId']").get_attribute('value')
-                    except NoSuchElementException:
-                        try:
-                            parent_id = self.driver.find_element(By.XPATH, "//form[@class='review-filter-form']").get_attribute('action').split("parentId=")[-1]
-                        except NoSuchElementException:
-                            parent_id = self.driver.find_element(By.XPATH, "//form[@class='product-detail-review-language-form']").get_attribute('action').split("parentId=")[-1]
+                    cloud_data_string = self.driver.find_element(By.XPATH, "//script[@data-shop-studio-google-tag-manager-cloud-data='product-page-loaded']").get_attribute('innerHTML')
+                    cloud_data = json.loads(cloud_data_string)
+                    parent_id = cloud_data.get("product").get("category").get("parentId")
+                    print(parent_id)
+                    # try:
+                    #     parent_id = self.driver.find_element(By.XPATH, "//input[@name='parentId']").get_attribute('value')
+                    # except NoSuchElementException:
+                    #     try:
+                    #         parent_id = self.driver.find_element(By.XPATH, "//form[@class='review-filter-form']").get_attribute('action').split("parentId=")[-1]
+                    #     except NoSuchElementException:
+                    #         parent_id = self.driver.find_element(By.XPATH, "//form[@class='product-detail-review-language-form']").get_attribute('action').split("parentId=")[-1]
                     current_product = None
                     for p in current_category.subcategories:
                         if p.number == parent_id:
@@ -338,7 +350,7 @@ class ScriptRun(base.Run):
                                    f.write(product_specification.content)
                                 try:
                                     df = tabula.read_pdf(file_name, lattice=True, pages=1, encoding='utf-8', pandas_options={'header': None})[0]
-                                except CalledProcessError:
+                                except: # (CalledProcessError, ParseException)
                                     abort_ps = True
                                     self.notifications.append(f"No product specification file for {orig_name}")
                                 if not abort_ps:
@@ -407,13 +419,11 @@ class ScriptRun(base.Run):
         if base.containing_strings_check(list1=[orig_name, current_product.name], list2=["kochbuch"], case_sensitive=False, strip=False) and orig_unit == "Stück":
             reduced_vat = False
         if reduced_vat:
-            original_vat = self.original_vat_reduced
             recipient_vat = self.recipient_vat_reduced
         else:
-            original_vat = self.original_vat_standard
             recipient_vat = self.recipient_vat_standard
         if not b2b:
-            net_price = net_price / (1.0 + original_vat / 100) # calculating net price
+            net_price = net_price / (1.0 + recipient_vat / 100) # calculating net price
         current_product.offers.append(Offer(shop=shop, number=number, name=current_product.name, content=self.parse_unit_to_parcels(orig_unit), orig_unit=orig_unit, price=net_price, vat=recipient_vat, category_name=current_category.name))
         # return current_product
 
@@ -498,7 +508,7 @@ class Offer:
         else:
             return self.gross_price / (self.content_grm / 1000)
 
-    def fs_unit(self, exclude_categories_from_loose_orders):
+    def fs_unit(self, exclude_categories_from_loose_orders, recipient_vat_standard, recipient_vat_reduced):
         unit_quantity = 1
         if self.content:
             if self.content.content == "grm":
@@ -517,7 +527,7 @@ class Offer:
                         if self.content.amount >= 2000:
                             self.name = self.name.split("(")[0] + " - Eimer"
                             unit = f"{str(self.content.amount / 1000).replace('.', ',')} kg"
-                            self.deposit = 3 * (1 + self.recipient_vat_standard / 100) / (1 + self.recipient_vat_reduced / 100)
+                            self.deposit = 3 * (1 + recipient_vat_standard / 100) / (1 + recipient_vat_reduced / 100)
                         else:
                             self.name = self.name.split("(")[0] + " - Beutel"
                             # unit += " Beutel"

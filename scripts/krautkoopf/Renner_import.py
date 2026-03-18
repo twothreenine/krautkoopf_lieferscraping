@@ -2,6 +2,7 @@
 Script for reading out the Hofladen PDF price list from Biohof Renner, A-8321 St. Margarethen an der Raab and creating a CSV file for article upload into Foodsoft.
 """
 
+import tabula
 import openpyxl
 
 import base
@@ -9,7 +10,7 @@ import script_libs.generic.foodsoft_article as foodsoft_article
 import script_libs.generic.foodsoft_article_import as foodsoft_article_import
 
 # Inputs this script's methods take
-price_list = base.Input(name="price_list", required=True, accepted_file_types=[".xslx"], input_format="file")
+price_list = base.Input(name="price_list", required=True, accepted_file_types=[".xlsx"], input_format="file")
 
 # Executable script methods
 convert_price_list = base.ScriptMethod(name="convert_price_list", inputs=[price_list])
@@ -39,13 +40,14 @@ class ScriptRun(base.Run):
         categories_to_ignore_containing = config.get("ignore categories by name (containing, case-insensitive)", [])
         articles_to_ignore_exact = config.get("ignore articles by name (exact, case-sensitive)", [])
         articles_to_ignore_containing = config.get("ignore articles by name (containing, case-insensitive)", [])
-        create_loose_offers = config.get("create loose offers", {})
+        sample_amount = config.get("sample amount")
+        split_amount_into = config.get("split amount into")
+        keep_separate_up_to_largest_amount_of = config.get("keep separate up to largest amount of")
 
-        # had no success with reading out the original PDF (pages 3 and 5 missing), manually copying to XSLX was easier
+        # had no success with reading out the original PDF (pages 3 and 5 missing), manually copying to XLSX was easier
 
         # tables = tabula.convert_into(price_list, "renner.csv", output_format="csv", pages="all")
-
-        # dfs = tabula.read_pdf(price_list, pages='all', encoding='ansi', stream=True)
+        # dfs = tabula.read_pdf(price_list, lattice=True, pages='all', encoding='ansi', stream=True)
         # print(dfs)
         # raw_tables = [df.where(df.notnull(), None).values.tolist() for df in dfs]
         # # raw_tables.pop(0) # header table with information about the farm
@@ -54,6 +56,7 @@ class ScriptRun(base.Run):
         #         print(row)
 
         self.articles = []
+        self.article_candidates = []
         self.categories = [] # not used
         self.products = []
         self.ignored_articles = []
@@ -69,18 +72,23 @@ class ScriptRun(base.Run):
             if str(offer_row[1]).strip() not in ["", "None", "Einheit in kg"]:
                 base_unit = "kg"
                 orig_name = str(offer_row[0]).strip()
+                name = orig_name
                 amount = float(str(offer_row[1]).replace(",", "."))
-                unit = f'{str(amount).replace(".", ",")} {base_unit}'
-                price_net = float(str(offer_row[2]).replace(",", "."))
-                vat = float(str(offer_row[4]).replace(",", "."))
-                base_price = price_net * (1 + vat/100) / amount
-                name = f"{orig_name} ({foodsoft_article_import.base_price_str(base_price, base_unit)})"
+                unit = f'{str(amount).replace(".", ",").rstrip('0').rstrip(',')} {base_unit}'
+                price_net = float(str(offer_row[4]).replace(",", "."))
+                vat = 10 #float(str(offer_row[5]).replace(",", "."))
                 origin = transform_origin(str(offer_row[6]).strip())
-                order_number = f"{orig_name}_{str(amount)}"
+                ean = offer_row[2]
+                if ean:
+                    order_number =  ean
+                else:
+                    f"{orig_name}_{str(amount)}"
                 if "teigwaren" in name:
                     category = "Teigwaren"
                 elif "kerne" in name or "samen" in name:
                     category = "Nüsse und Ölsaaten"
+                elif "linsen" in name:
+                    category = "Hülsenfrüchte"
                 else:
                     category = "Getreide, Mehl, Flocken"
                 article = foodsoft_article.Article(order_number=order_number, name=name, unit=unit, price_net=price_net, vat=vat, category=category, origin=origin, amount=amount, base_unit=base_unit, orig_name=orig_name)
@@ -98,26 +106,41 @@ class ScriptRun(base.Run):
                     product.open = True
                     self.products.append(product)
 
+        
         for product in self.products:
             product.articles = sorted(product.articles, key=lambda x: x.amount)
-            for article in product.articles:
-                article_to_ignore = False
-                for subdict in create_loose_offers:
-                    if article.amount >= create_loose_offers[subdict].get("split amounts from") and create_loose_offers[subdict].get("split amount into"):
-                        if product.open:
-                            divisor = round(article.amount / create_loose_offers[subdict].get("split amount into"))
-                            article.amount /= divisor
-                            article.unit = f'{str(article.amount).replace(".", ",")} {article.base_unit} lose'
-                            article.price_net = round(article.price_net / divisor, 2)
-                            article.unit_quantity = divisor
-                            product.open = False
-                        else:
-                            article_to_ignore = True
+            largest = product.articles[-1]
+            if largest.amount > keep_separate_up_to_largest_amount_of:
+                sample = product.articles[0]
+                for article in product.articles:
+                    sample = article
+                    if article.amount >= sample_amount:
+                        break
+                base_price = sample.price_net / sample.amount
+                sample.name += f" ({foodsoft_article_import.base_price_str(article_price=base_price, base_unit=sample.base_unit, vat=sample.vat, with_decimals=False)})"
+                sample.note = ", ".join([f"{a.unit}: {foodsoft_article_import.base_price_str(article_price=a.price_net / a.amount, base_unit=a.base_unit, vat=a.vat)}" for a in product.articles])
+                divisor = round(sample.amount / split_amount_into)
+                sample.amount /= divisor
+                sample.unit = f'{str(sample.amount).replace(".", ",").rstrip('0').rstrip(',')} {base_unit}'
+                sample.unit += ' lose'
+                sample.price_net = round(sample.price_net / divisor, 2)
+                sample.unit_quantity = divisor
+                self.article_candidates.append(sample)
+            else:
+                for article in product.articles:
+                    base_price = article.price_net / article.amount
+                    article.name += f" ({foodsoft_article_import.base_price_str(article_price=base_price, base_unit=article.base_unit, vat=article.vat, with_decimals=True)})"
+                    self.article_candidates.append(article)
 
-                if base.equal_strings_check(list1=[article.category], list2=categories_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[article.category], list2=categories_to_ignore_containing, case_sensitive=False, strip=False) or base.equal_strings_check(list1=[article.name, article.orig_name, article.order_number], list2=articles_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[article.name, article.orig_name, article.order_number], list2=articles_to_ignore_containing, case_sensitive=False, strip=False) or article_to_ignore:
-                    self.ignored_articles.append(article)
-                else:
-                    self.articles.append(article)
+        for article in self.article_candidates:
+            if base.equal_strings_check(list1=[article.category], list2=categories_to_ignore_exact, case_sensitive=True, strip=False) \
+                or base.containing_strings_check(list1=[article.category], list2=categories_to_ignore_containing, case_sensitive=False, strip=False) \
+                or base.equal_strings_check(list1=[article.name, article.orig_name, article.order_number], list2=articles_to_ignore_exact, case_sensitive=True, strip=False) \
+                or base.containing_strings_check(list1=[article.name, article.orig_name, article.order_number], list2=articles_to_ignore_containing, case_sensitive=False, strip=False):
+                
+                self.ignored_articles.append(article)
+            else:
+                self.articles.append(article)
 
         self.articles, self.notifications = foodsoft_article_import.rename_duplicates(locales=session.locales, articles=self.articles, notifications=self.notifications, compare_unit=True, keep_full_duplicates=True)
         self.articles, self.notifications = foodsoft_article_import.rename_duplicate_order_numbers(locales=session.locales, articles=self.articles, notifications=self.notifications)

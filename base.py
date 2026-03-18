@@ -72,7 +72,7 @@ class Input:
     """
     A variable for a script which has to be entered anew each time.
     """
-    def __init__(self, name, required=False, input_format="", accepted_file_types=None, example=None, description=""):
+    def __init__(self, name, required=False, input_format="", accepted_file_types=None, select_options=None, example=None, description="", other_attributes=None):
         self.name = name
         self.required = required
         self.input_format = input_format # "" (auto), "textarea", "file", "files"; and html input types like "text", "number", ...
@@ -80,8 +80,16 @@ class Input:
             self.accepted_file_types = accepted_file_types # for example [".csv"], or [] for all
         else:
             self.accepted_file_types = []
+        if select_options:
+            self.options = select_options
+        else:
+            self.options = {}
         self.example = example # if not a file
         self.description = description
+        if other_attributes:
+            self.other_attributes = other_attributes
+        else:
+            self.other_attributes = []
 
 class Category:
     """
@@ -103,7 +111,7 @@ def prepare_string_for_comparison(string, case_sensitive, strip):
     return string
 
 def equal_strings_check(list1, list2, case_sensitive=False, strip=True):
-    # compares strings of two lists for matches and returns list of matching strings
+    """ compares strings of two lists for matches and returns list of matching strings """
     matches = []
     compare_list1 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list1]
     compare_list2 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list2]
@@ -114,7 +122,7 @@ def equal_strings_check(list1, list2, case_sensitive=False, strip=True):
     return matches
 
 def containing_strings_check(list1, list2, case_sensitive=False, strip=True):
-    # checks if any string of list1 contains any string of list2 and returns list of matching strings of list2
+    """ checks if any string of list1 contains any string of list2 and returns list of matching strings of list2 """
     matches = []
     compare_list1 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list1]
     compare_list2 = [prepare_string_for_comparison(string, case_sensitive, strip) for string in list2]
@@ -313,12 +321,12 @@ def get_outputs(foodcoop, configuration):
     else:
         return []
 
-def get_file_path(foodcoop, configuration, run, folder, ending="", notifications=None):
+def get_file_path(foodcoop, configuration, run, folder, containing="", ending="", notifications=None):
     if not notifications:
         notifications = []
     path = os.path.join(output_path(foodcoop, configuration), run, folder)
     if os.path.isdir(path) and ending:
-        files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith(ending)]
+        files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith(ending) and containing_strings_check(list1=[f], list2=[containing])]
         if len(files) > 1:
             notifications.append("Warning: Multiple files found for " + run)
         if files:

@@ -12,20 +12,20 @@ def get_duplicates(article, articles, attribute="name", casefold=True, strip=Tru
     duplicates = []
     compared_attribute_of_article = getattr(article, attribute)
     if casefold:
-        compared_attribute_of_article = compared_attribute_of_article.casefold()
+        compared_attribute_of_article = str(compared_attribute_of_article).casefold()
     if remove_whitespaces:
-        compared_attribute_of_article = compared_attribute_of_article.replace(" ", "")
+        compared_attribute_of_article = str(compared_attribute_of_article).replace(" ", "")
     elif strip:
-        compared_attribute_of_article = compared_attribute_of_article.strip()
+        compared_attribute_of_article = str(compared_attribute_of_article).strip()
 
     for a in articles:
         compared_attribute = getattr(a, attribute)
         if casefold:
-            compared_attribute = compared_attribute.casefold()
+            compared_attribute = str(compared_attribute).casefold()
         if remove_whitespaces:
-            compared_attribute = compared_attribute.replace(" ", "")
+            compared_attribute = str(compared_attribute).replace(" ", "")
         elif strip:
-            compared_attribute = compared_attribute.strip()
+            compared_attribute = str(compared_attribute).strip()
         if compared_attribute == compared_attribute_of_article:
             duplicates.append(a)
     return duplicates
@@ -97,6 +97,22 @@ def rename_duplicate_order_numbers(locales, articles, notifications):
                 a.order_number = new_order_number
     return articles, notifications
 
+def remove_articles_with_duplicate_order_numbers(locales, articles, notifications):
+    for article in articles:
+        articles_of_this_number = get_duplicates(article, articles, "order_number")
+        if len(articles_of_this_number) > 1:
+            # keep the article with the lowest price and most information
+            articles_of_this_number.sort(key=lambda x: x.price_net)
+            articles_of_this_price = get_duplicates(articles_of_this_number[0], articles_of_this_number, "price_net")
+            articles_of_this_price.sort(key=lambda x: (len(x.origin), len(x.manufacturer), len(x.note)), reverse=True)
+            articles_to_be_removed = [a for a in articles_of_this_number if a not in articles_of_this_price]
+            if len(articles_of_this_price) > 1:
+                articles_to_be_removed.extend(articles_of_this_price[1:])
+            for article_to_be_removed in articles_to_be_removed:
+                notifications.append(locales["foodsoft_article_import"]["presumed duplicate removed"].format(article_name=f"{article_to_be_removed.name} ({article_to_be_removed.price_net})"))
+                articles.remove(article_to_be_removed)
+    return articles, notifications
+
 def compare_string(locales, article, article_from_last_run, article_from_foodsoft, string_type, configuration_config, notifications, article_order_number=None):
     if string_type not in ["name", "note", "manufacturer", "origin", "unit", "price_net", "vat", "deposit", "unit_quantity"]:
         notifications.append(locales["foodsoft_article_import"].get("invalid string type for article attribute") + string_type)
@@ -145,7 +161,7 @@ def get_articles_from_foodsoft(locales, supplier_id, foodsoft_connector=None, ve
         print(warning)
     return articles_from_foodsoft, notifications
 
-def compare_manual_changes(locales, foodcoop, supplier, articles, articles_from_foodsoft, version_delimiter=None, prefix_delimiter=None, notifications=None, compare_name=True, compare_note=True, compare_manufacturer=True, compare_origin=True, compare_unit=True, compare_price=True, compare_vat=True, compare_deposit=True, compare_unit_quantity=True, compare_category=True):
+def compare_manual_changes(locales, foodcoop, supplier, articles, articles_from_foodsoft, version_delimiter=None, prefix_delimiter=None, notifications=None, compare_name=True, compare_note=True, compare_manufacturer=True, compare_origin=True, compare_unit=True, compare_price=True, compare_vat=True, compare_deposit=True, compare_unit_quantity=True, compare_category=True, last_imported_csv_containing=""):
     """
     This is an optional method which checks if article data has been modified manually in Foodsoft after the last CSV was created.
     In case the article data in the source did not change since the last run of the script and the article data from your Foodsoft instance differs, latter is adopted.
@@ -160,10 +176,10 @@ def compare_manual_changes(locales, foodcoop, supplier, articles, articles_from_
         configuration_config["manual changes"] = {}
 
     # Get the last CSV created by the script
-    last_imported_run_name = base.read_in_config(configuration_config, "last imported run", "")
+    last_imported_run_name = configuration_config.get("last imported run", "")
     last_imported_csv = None
     if last_imported_run_name:
-        last_imported_csv, notifications = base.get_file_path(foodcoop=foodcoop, configuration=supplier, run=last_imported_run_name, folder="download", ending=".csv", notifications=notifications)
+        last_imported_csv, notifications = base.get_file_path(foodcoop=foodcoop, configuration=supplier, run=last_imported_run_name, folder="download", containing=last_imported_csv_containing, ending=".csv", notifications=notifications)
     if not last_imported_csv:
         notifications.append(locales["foodsoft_article_import"].get("no previous CSV found"))
         articles_from_last_run = []
@@ -249,7 +265,7 @@ def version_articles(articles, articles_from_foodsoft, version_delimiter, compar
     return articles
 
 
-def recalculate_unit_for_article(article, category_names, recalculate_units):
+def recalculate_unit_for_article(article, category_names, recalculate_units, recalculate_unit_quantity=False, add_base_price_to_name=True):
     """
     Transforms a single article into a list of articles with new custom units.
     category_names is expected to be a list (e.g. [original_category, renamed_category]).
@@ -289,6 +305,12 @@ def recalculate_unit_for_article(article, category_names, recalculate_units):
             Stk: 1
             6er Pkg: 6
             10er Pkg: 10
+    rest:
+        any: True               # if this is set, categories and article filters will be ignored and the rule will be applied to all remaining articles (default: False)
+        original units:
+        - kg
+        replacement units:
+            500 g: 0.5
 
     Note that only the first matching recalculating subdict will be applied (break statement).
     """
@@ -318,17 +340,24 @@ def recalculate_unit_for_article(article, category_names, recalculate_units):
                 else:
                     articles_matching = base.containing_strings_check(list1=[article.name], list2=recalculate_for_articles, case_sensitive=categories_case_sensitive)
             matching = False
-            if recalculate_units[subdict].get("intersection", False):
+            if recalculate_units[subdict].get("any", False):
+                matching = True
+            elif recalculate_units[subdict].get("intersection", False):
                 if categories_matching and articles_matching:
                     matching = True
             elif categories_matching or articles_matching:
                     matching = True
 
             if matching:
-                article_name_with_base_price = article.name + f" ({base_price_str(article_price=article.price_net, base_unit=article.unit, vat=article.vat)})"
+                if add_base_price_to_name:
+                    article_name_with_base_price = article.name + f" ({base_price_str(article_price=article.price_net, base_unit=article.unit, vat=article.vat)})"
+                else:
+                    article_name_with_base_price = article.name
+                    article.base_price = article.price_net
+                    article.base_unit = article.unit
                 for replacement_unit_str, replacement_unit_factor in recalculate_units[subdict].get("replacement units", {}).items():
                     article_in_replacement_unit = copy.deepcopy(article)
-                    article_in_replacement_unit = replace_unit(article=article_in_replacement_unit, replacement_unit_str=replacement_unit_str, replacement_unit_factor=replacement_unit_factor)
+                    article_in_replacement_unit = replace_unit(article=article_in_replacement_unit, replacement_unit_str=replacement_unit_str, replacement_unit_factor=replacement_unit_factor, recalculate_unit_quantity=recalculate_unit_quantity)
                     if recalculate_units[subdict].get("show base price", True) and not replacement_unit_factor == 1:
                         article_in_replacement_unit.name = article_name_with_base_price
                     articles.append(article_in_replacement_unit)
@@ -392,21 +421,77 @@ def resort_articles_in_categories(article_name, category_name, resort_articles_i
     if return_original:
         return category_name
 
-def base_price_str(article_price, base_unit, vat=0):
+def base_price_str(article_price, base_unit, vat=0, with_decimals=True):
     # used in combination with recalculate_unit_for_article
     if article_price:
         gross_price = article_price + article_price * vat / 100
-        return f"{'{:.2f}'.format(round(gross_price, 2)).replace('.', ',')} € / {base_unit}"
+        if with_decimals:
+            price_str = '{:.2f}'.format(round(gross_price, 2)).replace('.', ',')
+        else:
+            price_str = 'ca. ' + str(round(gross_price))
+        return f"{price_str} € / {base_unit}"
     else:
         return f"? € / {base_unit}"
 
-def replace_unit(article, replacement_unit_str, replacement_unit_factor):
+def replace_unit(article, replacement_unit_str, replacement_unit_factor, recalculate_unit_quantity):
     # used in combination with recalculate_unit_for_article
     article.unit = replacement_unit_str
     if article.price_net:
+        if recalculate_unit_quantity:
+            old_article_quantity = article.unit_quantity
+            article.unit_quantity = round(article.unit_quantity / replacement_unit_factor)
+            replacement_unit_factor = old_article_quantity / article.unit_quantity
         article.price_net = round(article.price_net * replacement_unit_factor, 2)
     return article
 
+def create_articles_from_dict(dict):
+    """
+    Creates a list of articles from a dictionary/YAML specification, useful for including additional articles 
+    (which are not present in the read-out source) by specifying them in the configuration.
+
+    dict is expected to be a dictionary of the following layout:
+    {"Vegetables": {"Article 1 Name": {"unit": "1 kg", "price net": 10.9}, "another article": {"order number": 123, "unit": "1 kg", "unit quantity": 10, "price net": 10.9, "vat": 10, "deposit": 0.5, "origin": "1234 Place", "manufacturer": "someone", "note": "large pieces", "available": False}}}
+
+    Or in YAML style:
+    Vegetables:                     # specify category name in the superkey (applied to all subitems)
+        Article 1 Name:             # specify the article name in the subkey
+            unit: 1 kg              # unit and price net are the only mandatory attributes
+            price net: 10.9
+        another article:
+            unit: 1 kg
+            price net: 10.9
+            order number: 123       # default: article name
+            unit quantity: 10       # default: 1
+            vat: 10                 # default: 0
+            deposit: 0.5            # default: 0
+            origin: 1234 Place      # default: ""
+            manufacturer: someone   # default: ""
+            note: large pieces      # default: ""
+            available: False        # default: True
+    """
+    
+    articles = []
+    notifications = []
+    for category, article_data in dict.items():
+        for name, attributes in article_data.items():
+            price_net = attributes.get("price net")
+            unit = attributes.get("unit")
+            if not (price_net and unit):
+                notifications.append(f"Failed to create additional article '{name}': 'price net' and/or 'unit' not specified in configuration")
+                continue
+            articles.append(foodsoft_article.Article(order_number = attributes.get("order number", name), 
+                                                    name=name, 
+                                                    unit=unit, 
+                                                    price_net=price_net, 
+                                                    available = attributes.get("available", True), 
+                                                    note = attributes.get("note"), 
+                                                    manufacturer = attributes.get("manufacturer"), 
+                                                    origin = attributes.get("origin"), 
+                                                    vat = attributes.get("vat"), 
+                                                    deposit = attributes.get("deposit"), 
+                                                    unit_quantity = attributes.get("unit quantity"), 
+                                                    category = category))
+    return articles, notifications
 
 def validate_string(locales, string, string_type, article, notifications):
     """

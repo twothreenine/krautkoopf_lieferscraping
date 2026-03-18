@@ -1,6 +1,7 @@
 """
 Collects all articles from your Foodsoft instance and imports them into WooCommerce via API. Useful for creating a public product catalog.
 In case you want to exclude certain suppliers, you can do that by using supplier categories in Foodsoft.
+TODO: add 'omit category' variable
 """
 
 import re
@@ -115,7 +116,7 @@ class ScriptRun(base.Run):
                 if not s_a.order_number:
                     s_a.order_number = f"article{str(supplier_articles.index(s_a))}"
                 sku = f"{supplier.no}_{s_a.order_number}"
-                name, base_price = self.split_article_name_into_name_and_base_price(article_name=s_a.name, supplier_name=supplier.name, regex_for_splitting_article_name_into_name_and_base_price=regex_for_splitting_article_name_into_name_and_base_price)
+                name, base_price = self.split_article_name_into_name_and_base_price(article_name=s_a.name, regex_for_splitting_article_name_into_name_and_base_price=regex_for_splitting_article_name_into_name_and_base_price)
                 category = self.categorize(original_category_name=s_a.category, article_name=name, super_categories=super_categories, regex_for_categories=regex_for_categories)
                 if not base_price:
                     s_a.parse_unit(decimal_separator=decimal_separator, prefixed_currency_symbol=prefixed_currency_symbol, postfixed_currency_symbol=postfixed_currency_symbol)
@@ -150,11 +151,11 @@ class ScriptRun(base.Run):
                 name = name_split[1]
                 if len(name_split) > 2:
                     rest = "".join(name_split[2:])
-                    self.notifications.append(f"Article name '{saff.name}' (stock article) split into more than 2 parts: '{order_number}' (order number), '{name}' (name), and '{rest}' (ignored rest)")
+                    self.notifications.append(f"Article name '{saff.name}' (stock article) split into more than 2 parts: '{saff.order_number}' (order number), '{name}' (name), and '{rest}' (ignored rest)")
             else:
                 name = saff.name
                 sku = saff.order_number
-            name, base_price = self.split_article_name_into_name_and_base_price(article_name=name, supplier_name=saff.supplier.name, regex_for_splitting_article_name_into_name_and_base_price=regex_for_splitting_article_name_into_name_and_base_price)
+            name, base_price = self.split_article_name_into_name_and_base_price(article_name=name, regex_for_splitting_article_name_into_name_and_base_price=regex_for_splitting_article_name_into_name_and_base_price)
             if name in [sp.name for sp in stock_products if sp.attributes[2].get("options")[0] == saff.supplier.name]: # TODO: find a better way to omit supply duplicates (e.g. marking them in Foodsoft)
                 continue
             saff.supplier.apply_supplier_delimiters(supplier_name_prefix_delimiters=supplier_name_prefix_delimiters, supplier_name_suffix_delimiters=supplier_name_suffix_delimiters, category_name_prefix_delimiters=category_name_prefix_delimiters, category_name_suffix_delimiters=category_name_suffix_delimiters)
@@ -200,7 +201,7 @@ class ScriptRun(base.Run):
         number_of_order_products = len(self.products)
         self.products = stock_products + self.products
 
-        self.message = session.locales["generic_foodsoft_articles_to_woocommerce"]["collected products summary"].format(number_of_collected_products=str(len(self.products)), number_of_suppliers=str(len(suppliers)), number_of_order_products=str(number_of_order_products), number_of_stock_products=str(len(stock_products)))
+        self.message = session.locales["generic.foodsoft_articles_to_woocommerce"]["collected products summary"].format(number_of_collected_products=str(len(self.products)), number_of_suppliers=str(len(suppliers)), number_of_order_products=str(number_of_order_products), number_of_stock_products=str(len(stock_products)))
         base.write_txt(file_path=base.file_path(path=self.path, folder="display", file_name=session.locales["base"]["summary"]), content=self.message)
         self.log.append(base.LogEntry(action="products collected", done_by=base.full_user_name(session)))
         self.next_possible_methods = [import_to_woocommerce]
@@ -336,8 +337,8 @@ class ScriptRun(base.Run):
             products_to_update_json.append(p_dict)
         self.batch_update(api=woocommerce_API, endpoint="products/batch", method="update", data=products_to_update_json)
 
-        self.message += "\n\n" + session.locales["generic_foodsoft_articles_to_woocommerce"]["updated categories summary"].format(number_of_created_categories=str(len(product_categories_to_create)), number_of_updated_categories=str(len(product_categories_to_update)), number_of_deleted_categories=str(len(pc_batch_delete)))
-        self.message += "\n" + session.locales["generic_foodsoft_articles_to_woocommerce"]["updated products summary"].format(number_of_created_products=str(len(products_to_create_json)), number_of_updated_products=str(len(self.products_to_update)), number_of_deleted_products=str(len(products_to_delete_json)))
+        self.message += "\n\n" + session.locales["generic.foodsoft_articles_to_woocommerce"]["updated categories summary"].format(number_of_created_categories=str(len(product_categories_to_create)), number_of_updated_categories=str(len(product_categories_to_update)), number_of_deleted_categories=str(len(pc_batch_delete)))
+        self.message += "\n" + session.locales["generic.foodsoft_articles_to_woocommerce"]["updated products summary"].format(number_of_created_products=str(len(products_to_create_json)), number_of_updated_products=str(len(self.products_to_update)), number_of_deleted_products=str(len(products_to_delete_json)))
         if self.notifications:
             self.message += f'\n\n{session.locales["base"]["notifications"]}:'
             for notification in self.notifications:
@@ -350,7 +351,7 @@ class ScriptRun(base.Run):
         self.next_possible_methods = []
         self.completion_percentage = 100
 
-    def split_article_name_into_name_and_base_price(self, article_name, supplier_name, regex_for_splitting_article_name_into_name_and_base_price):
+    def split_article_name_into_name_and_base_price(self, article_name, regex_for_splitting_article_name_into_name_and_base_price):
         name_split_re = re.split(regex_for_splitting_article_name_into_name_and_base_price, article_name)
         name_split = [el for el in name_split_re if el]
         if len(name_split) > 1:
@@ -359,7 +360,6 @@ class ScriptRun(base.Run):
             if len(name_split) > 2:
                 rest = " ".join(name_split[2:])
                 name += f" {rest}"
-                # self.notifications.append(f"Article name '{article_name}' ({supplier_name}) split into more than 2 parts: '{name}' (name), '{base_price}' (base price), and '{rest}' (ignored rest)")
         else:
             name = article_name
             base_price = ""
@@ -382,7 +382,7 @@ class ScriptRun(base.Run):
             regex = re.search(regex_for_categories, category_name)
             if regex:
                 category_name = regex.group(1)
-        cat = next((c for c in self.product_categories if c.name == category_name))
+        cat = next((c for c in self.product_categories if c.name == category_name), None)
         if not cat:
             cat = woocommerce_product.ProductCategory(name=category_name)
             self.product_categories.append(cat)
@@ -396,7 +396,7 @@ class ScriptRun(base.Run):
         return cat
 
     def find_article_category_number(self, category_name):
-        matching_category = next((c for c in self.article_categories if c.name == category_name))
+        matching_category = next((c for c in self.article_categories if c.name == category_name), None)
         if matching_category:
             return matching_category.number
 
@@ -417,7 +417,7 @@ class ScriptRun(base.Run):
             if not manual_changes_for_product:
                 config["manual changes for products"][product.sku] = {}
             config["manual changes for products"][product.sku][attribute] = {"replaced": attr_from_last_run, "manual": attr_from_woocommerce}
-            self.notifications.append(locales["generic_foodsoft_articles_to_woocommerce"]["keeping manual change"].format(article_number=product.sku, article_name=product.name, string_type=attribute, replaced_string=attr_from_last_run, manual_string=attr_from_woocommerce))
+            self.notifications.append(locales["generic.foodsoft_articles_to_woocommerce"]["keeping manual change"].format(article_number=product.sku, article_name=product.name, string_type=attribute, replaced_string=attr_from_last_run, manual_string=attr_from_woocommerce))
             setattr(product, attribute, attr_from_woocommerce)
         else:
             if mc_attribute and current_attr == mc_attribute.get("replaced"):

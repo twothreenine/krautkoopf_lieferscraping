@@ -1,0 +1,59 @@
+# variables
+temporary email address:
+    name: Temporäre E-Mail-Adresse
+    description: ...
+
+# log
+first try done: "Erster Versuch gestartet"
+Accounts created: "Accounts angelegt"
+
+# methods
+first_try:
+    name: "Accounts anlegen"
+    description: "Hiermit wird versucht die Accounts anzulegen. Falls ein Nickname oder eine E-Mail-Adresse mehrfach vorkommt oder bereits vergeben wird, wird nach einer anderen gefragt."
+
+retry_membership_fee:
+    name: Höheren Mitgliedsbeitrag eingeben
+
+retry_ordergroup_name:
+    name: Anderen Bestellgruppen-Namen versuchen
+    description: Es kann sein, dass Namensgleichheit mit einer existierenden oder als gelöscht markierten Bestellgruppe besteht. Falls du den Namen derjenigen Bestellgruppe geändert hast und es noch mal mit dem gleichen Bestellgruppen-Namen versuchen willst, lass das Feld leer.
+
+retry_nick:
+    name: Anderen Nicknamen versuchen
+    description: Es kann sein, dass Namensgleichheit mit einem existierenden oder als gelöscht markierten User besteht. Falls du den Namen desjenigen Users geändert hast und es noch mal mit dem gleichen Nickname versuchen willst, lass das Feld leer.
+
+retry_email:
+    name: Andere E-Mail-Adresse versuchen
+    description: Es kann sein, dass diese E-Mail-Adresse schon von einem existierenden oder als gelöscht markierten User verwendet wird. Falls du die E-Mail-Adresse desjenigen Users geändert hast und es noch mal mit der gleichen E-Mail-Adresse versuchen willst, lass das Feld leer.
+
+retry_first_name:
+    name: Anderen Vornamen versuchen
+
+retry_unknown_field:
+    name: Unvorgesehenes Feld für Validierung
+
+create_Discourse_objects:
+    name: Discourse-Accounts anlegen
+
+# inputs
+form_data:
+    name: Fomulardaten
+
+profile_images:
+    name: Profilbilder
+
+membership_fee:
+    name: Höherer Mitgliedsbeitrag
+
+ordergroup_name:
+    name: Anderer Bestellgruppen-Name
+
+nick:
+    name: Anderer Nickname
+
+email:
+    name: Andere E-Mail-Adresse
+
+first_name:
+    name: Anderer Vorname
