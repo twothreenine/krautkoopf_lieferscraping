@@ -142,16 +142,22 @@ class ScriptRun(base.Run):
         ignore = False
         article = None
         last_article = False
+        microgreens_handled = False
 
         for row in rows:
-            if not category and row[0]:
+            if not row[0]:
+                category = None
+            elif not category:
                 category = base.Category(name=row[0].replace("Preisliste", "").strip())
                 category.original_articles = []
                 self.original_categories.append(category)
-            elif not row[0]:
-                category = None
             elif row[0].strip() == "Kultur":
                 continue
+            elif category.name == "Microgreens":
+                if not microgreens_handled:
+                    article = OriginalArticle(name="Microgreens", price=row[1], unit=row[2].strip())
+                    category.original_articles.append(article)
+                    microgreens_handled = True
             else:
                 article = OriginalArticle(name=row[0].strip(), price=row[1], unit=row[2].strip())
                 category.original_articles.append(article)
@@ -237,8 +243,8 @@ class ScriptRun(base.Run):
 
         category = None
         for row in availability_list:
-            if row.startswith("*") or row.startswith("•⁠⁠⁠⁠"):
-                name = row.replace("•⁠⁠", "").replace("*", "").replace("⁠", "").strip()
+            if row.startswith("*") or row.startswith("•⁠⁠⁠⁠") or row.startswith("-"):
+                name = row[1:].replace("⁠", "").strip()
                 variants = []
                 if article_variants_regex_match := re.search(r"(.+?) (.+(?= und | oder |\, ).+)", name):
                     name = article_variants_regex_match.group(1)
@@ -275,10 +281,20 @@ class ScriptRun(base.Run):
         self.price_articles = last_run_with_price_list.articles
         self.original_category_names = [oc.name for oc in last_run_with_price_list.original_categories]
         self.price_articles_names = [pa.name for pa in self.price_articles]
+        print(self.price_articles_names)
         self.unmatched_available_article_variants = []
+
+        # map microgreens
+        microgreens_price_article = next((pa for pa in self.price_articles if pa.name == "Microgreens"), None)
+        if microgreens_price_article:
+            for aav in self.available_article_variants:
+                if "Microgreens" in aav.category:
+                    aav.name = f"Microgreens {aav.name}"
+                    aav.matching_price_article = microgreens_price_article
+        unmatched_available_article_variants = [aav for aav in self.available_article_variants if not aav.matching_price_article]
         
         # match available articles to price articles
-        for aav in self.available_article_variants:
+        for aav in unmatched_available_article_variants:
             close_matches = []
             if aav.variant:
                 a_v = f"{aav.name} {aav.variant}"
@@ -290,7 +306,19 @@ class ScriptRun(base.Run):
                 self.process_close_matches(available_article_variant=aav, close_matches=close_matches)
         
         unmatched_available_article_variants = [aav for aav in self.available_article_variants if not aav.matching_price_article]
-        print(unmatched_available_article_variants)
+
+        # apply manual mappings from the past
+        if unmatched_available_article_variants and config.get("articles mapping"):
+            for uaav in unmatched_available_article_variants:
+                mapping_category = config["articles mapping"].get(uaav.category)
+                if mapping_category:
+                    av_mapping = mapping_category.get(" ".join([uaav.name, uaav.variant]))
+                    if av_mapping:
+                        price_article = next((pa for pa in self.price_articles if pa.order_number == av_mapping), None)
+                        if price_article:
+                            uaav.matching_price_article = price_article
+                        
+        # prompt user to map the remaining articles
         if unmatched_available_article_variants:
             select_inputs = []
             for uaav in unmatched_available_article_variants:
@@ -315,12 +343,19 @@ class ScriptRun(base.Run):
     
     def select_matching_articles(self, session, **matching_articles):
         print("select_matching_articles:")
+        config = base.read_config(self.foodcoop, self.configuration)
         for ma in matching_articles:
             print(f"  {ma}: {matching_articles[ma]}")
             aav = self.available_article_variants[int(ma.replace("article", ""))]
             pa = self.price_articles[int(matching_articles[ma])]
             print(f"    {aav.name}: {pa.name}")
             aav.matching_price_article = pa
+            if not config.get("articles mapping"):
+                config["articles mapping"] = {}
+            if not config["articles mapping"].get(aav.category):
+                config["articles mapping"][aav.category] = {}
+            config["articles mapping"][aav.category].update({" ".join([aav.name, aav.variant]): pa.order_number})
+        base.save_config(foodcoop=self.foodcoop, configuration=self.configuration, config=config)
         self.create_Foodsoft_articles(session)
 
     def create_Foodsoft_articles(self, session):
