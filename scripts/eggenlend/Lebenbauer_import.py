@@ -42,7 +42,8 @@ def config_variables(): # List of the special config variables this script uses,
         base.Variable(name="recalculate units", required=False, example={"Obst & Gemüse": {"categories": ["Obst & Gemüse"], "original units": ["kg", "1kg", "1 kg"], "replacement units": {"500g": 0.5}}, "Äpfel": {"categories": ["Äpfel"], "original units": ["kg", "1kg", "1 kg"], "replacement units": {"500g": 0.5}}}),
         base.Variable(name="resort articles in categories", required=False, example={"Kategorie 1": {"exact": False, "case-sensitive": False, "original categories": ["Obst & Gemüse", "Äpfel"], "target categories": {"Fruchtgemüse": ["Zucchini", "tomate"]}}}),
         base.Variable(name="article details", required=False, example={"Kategorie 1": {"exact": False, "case-sensitive": False, "categories": ["Brot"], "origin": "eigen", "manufacturer": "Biohof Lebenbauer"}}),
-        base.Variable(name="article details rest", required=False, example={"origin": "unbekannt", "manufacturer": "unbekannt"})
+        base.Variable(name="article details rest", required=False, example={"origin": "unbekannt", "manufacturer": "unbekannt"}),
+        base.Variable(name="category numbering", required=False, example={{"Gemüse": "00"}, {"Frisch Gekochtes & Pilze": "01"}})
         ]
 
 class ScriptRun(base.Run):
@@ -72,6 +73,7 @@ class ScriptRun(base.Run):
         conf.resort_articles_in_categories = config.get("resort articles in categories", {})
         conf.article_details = config.get("article details", {})
         conf.article_details_rest = config.get("article details rest", {})
+        self.category_numbering = config.get("category numbering", {})
         conf.unit_regex = r"(?!\d*\s?\%)(?:1⁄2|1⁄4|\d+),?\/?\.?\d*\s?g?\s?(?:ml.?)?(?:lt.?)?(?:d?kg ?)?(?:Kg ?)?(?:Pkg.?)?(?:pkg.?)?(?:Stk.?)?(?:stk.?)?"
         conf.prefix_delimiter = "_"
 
@@ -93,6 +95,13 @@ class ScriptRun(base.Run):
                 category.row_index = table.index(row)
                 category.raw_rows = []
                 self.categories.append(category)
+        
+        if self.category_numbering:
+            self.category_numbering = foodsoft_article_import.insert_category_numbers(category_numbering=self.category_numbering, new_categories=self.categories)
+        else:
+            for c in self.categories:
+                self.category_numbering[c.name] = str(index(c)).zfill(2)
+
         self.find_category_rows_in_table(table=table, category=category)
         
         for category in self.categories:
@@ -121,14 +130,15 @@ class ScriptRun(base.Run):
             if base.equal_strings_check(list1=[category.name], list2=conf.categories_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[category.name], list2=conf.categories_to_ignore_containing, case_sensitive=False, strip=False):
                 self.ignored_categories.append(category)
                 continue
+            category_number = self.category_numbering.get(category.name, "u")
             for row in category.rows:
-                self.handle_article_row(category=category, row=row, config=conf)
+                self.handle_article_row(category=category, category_number=category_number, row=row, config=conf)
             for subcategory in category.subcategories:
                 if base.equal_strings_check(list1=[subcategory.name], list2=conf.categories_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[subcategory.name], list2=conf.categories_to_ignore_containing, case_sensitive=False, strip=False):
                     self.ignored_categories.append(subcategory)
                     continue
                 for row in subcategory.rows:
-                    self.handle_article_row(category=category, row=row, subcategory=subcategory, config=conf)
+                    self.handle_article_row(category=category, category_number=category_number, row=row, subcategory=subcategory, config=conf)
 
         self.articles, self.notifications = foodsoft_article_import.rename_duplicates(locales=session.locales, articles=self.articles, notifications=self.notifications, compare_unit=True, keep_full_duplicates=False)
         self.articles, self.notifications = foodsoft_article_import.rename_duplicate_order_numbers(locales=session.locales, articles=self.articles, notifications=self.notifications)
@@ -145,12 +155,13 @@ class ScriptRun(base.Run):
 
     def mark_as_imported(self, session):
         base.set_config_detail(foodcoop=self.foodcoop, configuration=self.configuration, detail="last imported run", value=self.name)
+        base.set_config_detail(foodcoop=self.foodcoop, configuration=self.configuration, detail="category numbering", value=self.category_numbering)
 
         self.next_possible_methods = []
         self.completion_percentage = 100
         self.log.append(base.LogEntry(action="marked as imported", done_by=base.full_user_name(session)))
 
-    def handle_article_row(self, config, category, row, subcategory=None):
+    def handle_article_row(self, config, category, category_number, row, subcategory=None):
         name = str(row[0]).strip()
         price = None
         if row[1]:
@@ -234,7 +245,9 @@ class ScriptRun(base.Run):
             elif "chips" in name:
                 category_name = "Dörr-Obst"
             product_variant_names = [name]
-            if product_variants_regex_match := re.search(r"(.*?)(\S*)\W+(?>oder|o\.|u\.)\W*(\S*)", name):
+            name.replace("klein, gewaschen", "klein gewaschen")
+            # TODO: improve article splitting for cases like "Kohlrabipfl, Zucchinipfl" ... regex draft: (.*?)(?>\W+oder\s|\W+und\s|\W+o\.|\W+od\.|\W+u\.|\,\-|\,)\W*(\S*)
+            if product_variants_regex_match := re.search(r"(.*?)(\S*)\W+(?>oder|o\.|od\.|u\.)\W*(\S*)", name):
                 if len(product_variants_regex_match.groups()) == 3 and "Frischkäse" not in name:
                     product_variant_names = []
                     name = product_variants_regex_match.group(1).strip()
@@ -327,7 +340,7 @@ class ScriptRun(base.Run):
 
                     articles = foodsoft_article_import.recalculate_unit_for_article(article=article, category_names=[category_name, target_category_name], recalculate_units=config.recalculate_units) # convert to e.g. 500g unit (multiple units possible)
                     for a in articles:
-                        a.order_number = f"{str(self.categories.index(category)).zfill(2)}{config.prefix_delimiter}{product_variant}_{a.unit}"
+                        a.order_number = f"{category_number}{config.prefix_delimiter}{product_variant}_{a.unit}"
                         self.articles.append(a)
 
     def find_category_rows_in_table(self, table, category, row=None):

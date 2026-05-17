@@ -421,6 +421,30 @@ def resort_articles_in_categories(article_name, category_name, resort_articles_i
     if return_original:
         return category_name
 
+def insert_category_numbers(category_numbering: dict[str, str], new_categories: list[base.Category]) -> dict[str, str]:
+    """
+    Useful if you want to generate order_numbers for articles starting with a category 'number' – if there's no article number given in the price list.
+    category_numbering is expected to be a dictionary of the following layout:
+    {{'Vegetables': '00'}, {'Fruits': '01'}, ...}
+    If new_categories = ['Vegetables', 'Bread', 'Dry goods', 'Fruits', ...] then 'Bread' will be given the number '00i' and 'Dry goods' '00ii' (i for inserted).
+    This preserves the original category numbering, not altering the corresponding article order_numbers (e.g. '01_Strawberries').
+    """
+
+    for c in new_categories:
+        old_category_number = next((category_numbering[pc] for pc in category_numbering if pc == c.name), None)
+        if not old_category_number:
+            # skip for now: ask user for matching / match similar strings
+            new_categories_before = new_categories[0:new_categories.index(c)]
+            if new_categories_before:
+                last_of_categories_before = new_categories_before.pop(-1)
+                category_numbering[str(c.name)] = category_numbering[last_of_categories_before] + "i" # e.g. 01iii, i for inserted
+            elif category_numbering:
+                category_numbering[str(c.name)] = category_numbering[next(iter(category_numbering))] + "i"
+            else:
+                category_numbering[str(c.name)] = "00i"
+    
+    return category_numbering
+
 def base_price_str(article_price, base_unit, vat=0, with_decimals=True):
     # used in combination with recalculate_unit_for_article
     if article_price:
