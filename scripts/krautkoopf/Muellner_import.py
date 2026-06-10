@@ -80,7 +80,7 @@ class ScriptRun(base.Run):
             product_page = BeautifulSoup(driver.page_source, features="html.parser").body
             product_data = product_page.find("div", {"data-gi-selector": "product-page"})
             info = product_data.find("div")
-            orig_name = info.find("h1").text.replace("bio ", "").replace("Bio ", "").replace(" 100% 🇦🇹", "")
+            orig_name = info.find("h1").text.replace("bio ", "").replace("Bio ", "").replace(" 🇦🇹", "").replace("100% AT", "").replace(" AT", "")
             description = info.find("p").get_text()
             category_name = product_page.find("section").find("ul").find_all("li")[1].get_text() # driver.find_element(By.XPATH, "//section/ul/li[2]/p/a/span").text
             category_name = foodsoft_article_import.resort_articles_in_categories(article_name=orig_name, category_name=category_name, resort_articles_in_categories=resort_articles_in_categories)
@@ -115,29 +115,32 @@ class ScriptRun(base.Run):
                     unit = option_contents[0].split(" (")[0]
                     price = float(option_contents[1].split(" ")[0].replace(",", "."))
                     order_number = f"{orig_name}_{unit}" # unit incl. unit quanitity here, can be e.g. "8 x 250 ml"
-                    if "x" in unit:
-                        unit_strings = unit.split("x")
+                    if " x " in unit:
+                        unit_strings = unit.split(" x ")
                         unit_quantity = int(unit_strings[0].strip())
                         unit = unit_strings[1].strip()
                         price = round(price / unit_quantity, 2)
                     else:
                         unit_quantity = 1
                     unit_re = re.search(r"(\d+(?:,\d+)?)\s(\D*)", unit)
-                    amount = float(unit_re.group(1).replace(",", "."))
-                    base_unit = unit_re.group(2).strip()
-                    if base_unit == "g":
-                        amount /= 1000
-                        base_unit = "kg"
-                    elif base_unit == "ml":
-                        amount /= 1000
-                        base_unit = "l"
-                    elif base_unit not in ["kg", "l"]:
-                        if amount == 1:
-                            unit = base_unit
-                        base_unit = None
-                    if base_unit:
-                        base_price = price / amount
-                        name = f"{orig_name} ({foodsoft_article_import.base_price_str(base_price, base_unit)})"
+                    if unit_re:
+                        amount = float(unit_re.group(1).replace(",", "."))
+                        base_unit = unit_re.group(2).strip()
+                        if base_unit == "g":
+                            amount /= 1000
+                            base_unit = "kg"
+                        elif base_unit == "ml":
+                            amount /= 1000
+                            base_unit = "l"
+                        elif base_unit not in ["kg", "l"]:
+                            if amount == 1:
+                                unit = base_unit
+                            base_unit = None
+                        if base_unit:
+                            base_price = price / amount
+                            name = f"{orig_name} ({foodsoft_article_import.base_price_str(base_price, base_unit)})"
+                        else:
+                            name = orig_name
                     else:
                         name = orig_name
                     article = foodsoft_article.Article(order_number=order_number, name=name, unit=unit, unit_quantity=unit_quantity, price_net=price, category=category_name, origin="eigen", note=description, amount=amount, base_unit=base_unit, orig_name=orig_name)
