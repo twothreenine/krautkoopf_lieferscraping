@@ -244,47 +244,49 @@ class ScriptRun(base.Run):
                 category_name = "Wurst"
             elif "chips" in name:
                 category_name = "Dörr-Obst"
-            product_variant_names = [name]
-            name.replace("klein, gewaschen", "klein gewaschen")
-            # TODO: improve article splitting for cases like "Kohlrabipfl, Zucchinipfl" ... regex draft: (.*?)(?>\W+oder\s|\W+und\s|\W+o\.|\W+od\.|\W+u\.|\,\-|\,)\W*(\S*)
-            if product_variants_regex_match := re.search(r"(.*?)(\S*)\W+(?>oder|o\.|od\.|u\.)\W*(\S*)", name):
-                if len(product_variants_regex_match.groups()) == 3 and "Frischkäse" not in name:
-                    product_variant_names = []
-                    name = product_variants_regex_match.group(1).strip()
-                    while name.endswith(".") or name.endswith(","):
-                        name = name[:-1].strip()
-                    for variant in product_variants_regex_match.groups()[1:]:
-                        product_variant_names.append(f"{name} {variant}")
-            elif "paprika" in name.casefold() and category_name == "Gemüse":
-                variants = name.casefold().replace("(hell)grün", "hellgrün, grün").split(",")
-                if variants:
-                    product_variant_names = []
-                    name = " ".join(variants[0].split(" ")[:-1])
-                    variants[0] = variants[0].replace(name, "")
-                    if len(name) > 1:
-                        name = name[0].upper() + name[1:]
-                    for variant in variants:
-                        variant_name = variant.strip()
-                        if variant_name:
-                            product_variant_names.append(f"{name} {variant_name}")
-            elif "honig" in category.name.casefold():
-                name_parts = name.split("onig")
-                print("Original: " + name)
-                if len(name_parts) > 1:
-                    variants_part = name_parts[-1]
-                    variants_part = variants_part.replace(")", "").replace("(", "").replace(".", "").replace(",", "").strip()
-                    variants_part = base.remove_double_strings_loop(variants_part, " ")
-                    variants = variants_part.split(' ')
-                    if variants:
-                        product_variant_names = []
-                    for variant in variants:
-                        variant = f"{variant.strip()}honig"
-                        if "biohonig" in name.casefold():
-                            variant = f"Bio-{variant}"
-                        if "oststeir" in name.casefold():
-                            variant = f"Oststeirischer {variant}"
-                        product_variant_names.append(variant)
-                        print("variant: " + variant)
+            name.replace("klein, gewaschen", "klein gewaschen").replace("(hell)grün", "hellgrün, grün").replace("\r", " ")
+            product_variant_names = split_string_into_variants(name)
+
+
+            # # TODO: improve article splitting for cases like "Kohlrabipfl, Zucchinipfl" ... regex draft: (.*?)(?>\W+oder\s|\W+und\s|\W+o\.|\W+od\.|\W+u\.|\,\-|\,)\W*(\S*)
+            # if product_variants_regex_match := re.search(r"(.*?)(\S*)\W+(?>oder|o\.|od\.|u\.)\W*(\S*)", name):
+            #     if len(product_variants_regex_match.groups()) == 3 and "Frischkäse" not in name:
+            #         product_variant_names = []
+            #         name = product_variants_regex_match.group(1).strip()
+            #         while name.endswith(".") or name.endswith(","):
+            #             name = name[:-1].strip()
+            #         for variant in product_variants_regex_match.groups()[1:]:
+            #             product_variant_names.append(f"{name} {variant}")
+            # elif "paprika" in name.casefold() and category_name == "Gemüse":
+            #     variants = name.casefold().replace("(hell)grün", "hellgrün, grün").split(",")
+            #     if variants:
+            #         product_variant_names = []
+            #         name = " ".join(variants[0].split(" ")[:-1])
+            #         variants[0] = variants[0].replace(name, "")
+            #         if len(name) > 1:
+            #             name = name[0].upper() + name[1:]
+            #         for variant in variants:
+            #             variant_name = variant.strip()
+            #             if variant_name:
+            #                 product_variant_names.append(f"{name} {variant_name}")
+            # elif "honig" in category.name.casefold():
+            #     name_parts = name.split("onig")
+            #     print("Original: " + name)
+            #     if len(name_parts) > 1:
+            #         variants_part = name_parts[-1]
+            #         variants_part = variants_part.replace(")", "").replace("(", "").replace(".", "").replace(",", "").strip()
+            #         variants_part = base.remove_double_strings_loop(variants_part, " ")
+            #         variants = variants_part.split(' ')
+            #         if variants:
+            #             product_variant_names = []
+            #         for variant in variants:
+            #             variant = f"{variant.strip()}honig"
+            #             if "biohonig" in name.casefold():
+            #                 variant = f"Bio-{variant}"
+            #             if "oststeir" in name.casefold():
+            #                 variant = f"Oststeirischer {variant}"
+            #             product_variant_names.append(variant)
+            #             print("variant: " + variant)
 
             # match categories
             target_category_name = foodsoft_article_import.resort_articles_in_categories(article_name=name, category_name=category_name, resort_articles_in_categories=config.resort_articles_in_categories)
@@ -313,7 +315,6 @@ class ScriptRun(base.Run):
                 manufacturer = config.article_details_rest.get("manufacturer", "")
 
             for product_variant in product_variant_names:
-                product_variant = product_variant.replace("\r", " ")
                 article = foodsoft_article.Article(order_number="", name=product_variant, unit=unit, price_net=price, vat=config.discount_percentage*-1, category=target_category_name, origin=origin, manufacturer=manufacturer, orig_unit=unit, orig_category=category_name)
                 if base.equal_strings_check(list1=[name], list2=config.articles_to_ignore_exact, case_sensitive=True, strip=False) or base.containing_strings_check(list1=[name], list2=config.articles_to_ignore_containing, case_sensitive=False, strip=False):
                     self.ignored_articles.append(article)
@@ -385,3 +386,52 @@ class ScriptRun(base.Run):
 
 class Config():
     pass
+
+def split_string_into_variants(input_string):
+    # coded with help of Ecosia AI
+    separators = [", ", " u.", " u ", " o.", " o ", " od.", " od ", " oder ", " und "]
+
+    groups = []
+    current_group = []
+    i = 0
+    n = len(input_string)
+
+    while i < n:
+        # Prüfen, ob ein Separator ab Position i beginnt
+        separator_found = None
+        for sep in separators:
+            if input_string.casefold().startswith(sep, i):
+                separator_found = sep
+                break
+
+        if separator_found is not None:
+            # Separator gefunden: Aktuelle Gruppe hinzufügen, falls nicht leer
+            if current_group:
+                groups.append("".join(current_group).strip())
+                current_group = []
+            # Position nach dem Separator verschieben
+            i += len(separator_found)
+        else:
+            # Kein Separator: Zeichen zur aktuellen Gruppe hinzufügen
+            current_group.append(input_string[i])
+            i += 1
+
+    # Letzte Gruppe hinzufügen, falls vorhanden
+    if current_group:
+        groups.append("".join(current_group).strip())
+
+    # Leere Gruppen entfernen
+    groups = [group for group in groups if group]
+
+    # Falls die erste Gruppe ein Leerzeichen enthält, aufteilen
+    if len(groups) > 1 and " " in groups[0]:
+        first_words = groups[0].split()
+        groups = first_words + groups[1:]
+
+    if len(groups) > 1:
+        # Erstes Wort mit allen Varianten kombinieren
+        variants = [f"{groups[0]} {v}" for v in groups[1:]]
+    else:
+        variants = groups
+
+    return variants
