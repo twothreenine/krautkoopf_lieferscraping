@@ -421,6 +421,59 @@ def resort_articles_in_categories(article_name, category_name, resort_articles_i
     if return_original:
         return category_name
 
+def find_vat_rate(article, category_names, vat_rates):
+    """
+    Transforms a single article into a list of articles with new custom units.
+    category_names is expected to be a list (e.g. [original_category, renamed_category]).
+    vat_rates is expected to be a dictionary of the following layout (yaml style here):
+    Kategorie 1:
+        categories exact: False            # default False
+        categories case-sensitive: False   # default False
+        categories:                        # category_name is checked for matches in these strings
+        - Dry goods
+        rate: 10                           # the vat rate to apply for this category
+    Kategorie 2:
+        articles exact: False              # default False
+        articles case-sensitive: False     # default False
+        intersection: False                # if both categories and articles are listed, this setting determines if both have to match (intersection) or if either is enough; default is False
+        articles:
+        - Shiitake
+        rate: 10
+    Kategorie Rest:                        # a default vat rate to apply if no other category matches
+        any: true
+        rate: 4.9
+
+    Note that only the first matching subdict will be applied (break statement).
+    """
+    for subdict in vat_rates:
+        apply_for_categories = vat_rates[subdict].get("categories", [])
+        categories_are_case_sensitive = vat_rates[subdict].get("categories case-sensitive", False)
+        categories_matching = False
+        if apply_for_categories:
+            if vat_rates[subdict].get("categories exact", False):
+                categories_matching = base.equal_strings_check(list1=category_names, list2=apply_for_categories, case_sensitive=categories_are_case_sensitive)
+            else:
+                categories_matching = base.containing_strings_check(list1=category_names, list2=apply_for_categories, case_sensitive=categories_are_case_sensitive)
+        apply_for_articles = vat_rates[subdict].get("articles", [])
+        articles_matching = False
+        if apply_for_articles:
+            articles_are_case_sensitive = vat_rates[subdict].get("articles case-sensitive", False)
+            if vat_rates[subdict].get("articles exact", False):
+                articles_matching = base.equal_strings_check(list1=[article.name], list2=apply_for_articles, case_sensitive=articles_are_case_sensitive)
+            else:
+                articles_matching = base.containing_strings_check(list1=[article.name], list2=apply_for_articles, case_sensitive=articles_are_case_sensitive)
+        matching = False
+        if vat_rates[subdict].get("any", False):
+            matching = True
+        elif vat_rates[subdict].get("intersection", False):
+            if categories_matching and articles_matching:
+                matching = True
+        elif categories_matching or articles_matching:
+                matching = True
+
+        if matching:
+            return vat_rates[subdict].get("rate", 0)
+
 def insert_category_numbers(category_numbering: dict[str, str], new_categories: list[base.Category]) -> dict[str, str]:
     """
     Useful if you want to generate order_numbers for articles starting with a category 'number' – if there's no article number given in the price list.

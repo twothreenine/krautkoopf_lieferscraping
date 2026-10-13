@@ -62,11 +62,14 @@ class ScriptRun(base.Run):
         strings_to_replace_in_article_note = config.get("strings to replace in article note", {})
         piece_articles_exact = config.get("piece articles (exact, case-sensitive)", {})
         piece_articles_containing = config.get("piece articles (containing, case-insensitive)", {})
+        no_piece_articles_containing = config.get("no piece articles (containing, case-insensitive)", [])
         recalculate_units = config.get("recalculate units", {})
         resort_articles_in_categories = config.get("resort articles in categories")
         dry_goods_from_category_on = config.get("dry goods from category on", "")
         additional_fresh_articles = config.get("additional fresh articles", {})
         additional_dry_articles = config.get("additional dry articles", {})
+        vat_rates_for_fresh_goods = config.get("vat rates for fresh goods", {})
+        vat_rates_for_dry_goods = config.get("vat rates for dry goods", {})
         prefix_delimiter = "_"
         self.categories = []
 
@@ -80,8 +83,9 @@ class ScriptRun(base.Run):
         self.ignored_categories = []
         self.ignored_articles = []
 
-        generator = price_list.iter_rows(min_row=21)
-        hidden_rows_indeces = [(row - 2 - 23) for row, dimension in price_list.row_dimensions.items() if dimension.hidden] # TODO: update numbers (what do they mean???)
+        row_index_where_actual_articles_start = 21
+        generator = price_list.iter_rows(min_row=row_index_where_actual_articles_start)
+        hidden_rows_indeces = [(row - row_index_where_actual_articles_start) for row, dimension in price_list.row_dimensions.items() if dimension.hidden]
         rows = []
         for row in generator:
             new_row = []
@@ -91,8 +95,7 @@ class ScriptRun(base.Run):
                 else:
                     new_row.append(column.value)
             rows += [new_row]
-        for hri in hidden_rows_indeces:
-            rows.pop(hri)
+        rows = [r for i, r in enumerate(rows) if i not in hidden_rows_indeces]
 
         category = None
         ignore = False
@@ -103,15 +106,17 @@ class ScriptRun(base.Run):
 
         for row in rows:
             column_A = row[0]
-            unit_column = row[2]
+            column_C = row[2]
             column_D = row[3]
             column_E = row[4]
             column_F = row[5]
             
-            if not unit_column and base.containing_strings_check(list1=[str(column_A)], list2=[end_heading_containing]):
+            if not column_C and base.containing_strings_check(list1=[str(column_A)], list2=[end_heading_containing]):
                 last_article = True
 
-            if unit_column or last_article:
+            is_variety_row = isinstance(column_D, str) and column_D.strip().startswith("Sorte:") # variety of the article above, not a new article
+
+            if (column_C and column_D and not is_variety_row) or last_article:
                 # new article in this row - save article from previous row first
                 if article:
                     article.name = base.replace_in_string(article.name, strings_to_replace_in_article_name).strip()
@@ -147,17 +152,18 @@ class ScriptRun(base.Run):
                     converted_to_piece_article = False
                     if not dry_goods:
                         if article.unit in ["kg"]: # convert to piece unit
+                            matching_no_piece_articles = base.containing_strings_check(list1=[article.name], list2=no_piece_articles_containing, case_sensitive=False, strip=False)
                             matching_piece_articles = base.equal_strings_check(list1=[article.name], list2=[str(entry) for entry in piece_articles_exact.keys()], case_sensitive=True, strip=False)
-                            if matching_piece_articles:
+                            if matching_piece_articles and not matching_no_piece_articles:
                                 article = self.convert_to_piece_article(article=article, conversion=piece_articles_exact[matching_piece_articles[0]])
                                 converted_to_piece_article = True
                             if not converted_to_piece_article:
                                 matching_piece_articles = base.containing_strings_check(list1=[article.name], list2=[str(entry) for entry in piece_articles_containing.keys()], case_sensitive=False, strip=False)
-                                if matching_piece_articles:
+                                if matching_piece_articles and not matching_no_piece_articles:
                                     article = self.convert_to_piece_article(article=article, conversion=piece_articles_containing[matching_piece_articles[0]])
                                     converted_to_piece_article = True
                     
-                    if base.equal_strings_check(list1=[raw_price_unit], list2=["1kg", "1 kg", "kg"]) and base.containing_strings_check(list1=[raw_name, raw_unit], list2=["Pkg"]):
+                    if base.equal_strings_check(list1=[raw_price_unit], list2=["1kg", "1 kg", "kg"]) and base.containing_strings_check(list1=[raw_name, raw_order_unit], list2=["Pkg"]):
                         article.price_net *= article.unit_quantity
 
                     if not dry_goods and not converted_to_piece_article:
@@ -215,7 +221,12 @@ class ScriptRun(base.Run):
 
                 if ignore:
                     continue
-                raw_unit = unit_column.strip()
+                if dry_goods:
+                    raw_order_unit = column_C.strip()
+                    raw_price_unit = row[7].strip()
+                else:
+                    raw_price_unit = column_C.strip()
+                    raw_order_unit = row[7].strip()
                 raw_name = column_D.strip()
                 if "Geschenkebox" in raw_name:
                     raw_name_split = raw_name.split("\n")
@@ -237,7 +248,6 @@ class ScriptRun(base.Run):
                     raw_origin = row[5]
                     if raw_origin:
                         raw_origin = raw_origin.strip()
-                raw_price_unit = row[7].strip()
                 if row[1] == "X":
                     available = False
                 else:
@@ -249,9 +259,14 @@ class ScriptRun(base.Run):
                     order_number = raw_name
                 deposit = 0
 
-                article = foodsoft_article.Article(order_number=order_number, name=raw_name, note=raw_note, unit=raw_unit, price_net=price, vat=10, category=category.name, deposit=deposit, origin=raw_origin, available=available, orig_unit=raw_unit)
-            
-            elif column_A:
+                article = foodsoft_article.Article(order_number=order_number, name=raw_name, note=raw_note, unit=raw_order_unit, price_net=price, category=category.name, deposit=deposit, origin=raw_origin, available=available, orig_unit=raw_price_unit)
+
+                if dry_goods:
+                    article.vat = foodsoft_article_import.find_vat_rate(article=article, category_names=[category.name], vat_rates=vat_rates_for_dry_goods)
+                else:
+                    article.vat = foodsoft_article_import.find_vat_rate(article=article, category_names=[category.name], vat_rates=vat_rates_for_fresh_goods)
+
+            elif isinstance(column_A, str) and column_A:
                 category_name = column_A.strip()
                 if category_name == dry_goods_from_category_on:
                     dry_goods = True
@@ -264,6 +279,8 @@ class ScriptRun(base.Run):
                     ignore = False
             
             else:
+                if column_A and article and not ignore: # further package size with its own order number (e.g. potatoes)
+                    article.order_number += f"/{str(column_A).strip()}"
                 if column_D:
                     column_D = base.replace_in_string(column_D, strings_to_replace_in_article_note).strip()
                     if article.note:
