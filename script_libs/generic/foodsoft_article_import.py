@@ -435,9 +435,9 @@ def insert_category_numbers(category_numbering: dict[str, str], new_categories: 
         if not old_category_number:
             # skip for now: ask user for matching / match similar strings
             new_categories_before = new_categories[0:new_categories.index(c)]
-            if new_categories_before:
+            if new_categories_before and category_numbering:
                 last_of_categories_before = new_categories_before.pop(-1)
-                category_numbering[str(c.name)] = category_numbering[last_of_categories_before] + "i" # e.g. 01iii, i for inserted
+                category_numbering[str(c.name)] = category_numbering.get(last_of_categories_before.name, '00') + "i" # e.g. 01iii, i for inserted
             elif category_numbering:
                 category_numbering[str(c.name)] = category_numbering[next(iter(category_numbering))] + "i"
             else:
